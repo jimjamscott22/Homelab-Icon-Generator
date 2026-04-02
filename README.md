@@ -23,15 +23,17 @@ Icons are generated programmatically using geometric shapes and text — no exte
 ```bash
 git clone https://github.com/jimjamscott22/Homelab-Icon-Generator.git
 cd Homelab-Icon-Generator
-pip install -r requirements.txt
+uv sync
 ```
+
+> Alternatively, install with pip: `pip install -r requirements.txt`
 
 ## Usage
 
 ### Single icon
 
 ```bash
-python main.py \
+uv run main.py \
   --name "Raspberry Pi Server" \
   --category raspberry_pi \
   --style terminal \
@@ -88,7 +90,7 @@ Create a JSON array of icon configs:
 Run with:
 
 ```bash
-python main.py --batch examples/sample_icons.json
+uv run main.py --batch examples/sample_icons.json
 ```
 
 Each entry uses the same keys as the CLI flags. All fields except `name` and `category` are optional and fall back to defaults.

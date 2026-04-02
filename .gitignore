@@ -208,3 +208,7 @@ __marimo__/
 
 # Git worktrees
 .worktrees/
+output/docker-host-cyberpunk-blue-256.png
+
+# Generated Icons
+output/*.png
