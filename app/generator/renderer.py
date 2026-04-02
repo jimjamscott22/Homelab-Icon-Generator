@@ -293,7 +293,7 @@ def _svg_iot(cx: int, cy: int, size: int, color: str) -> str:
     stroke_w = max(2, int(size * 0.025))
     for r in [int(size * 0.28), int(size * 0.20), int(size * 0.12)]:
         parts.append(
-            f'<path d="M {cx-r},{cy} A {r},{r} 0 0,0 {cx+r},{cy}" '
+            f'<path d="M {cx-r},{cy} A {r},{r} 0 0,1 {cx+r},{cy}" '
             f'stroke="{color}" stroke-width="{stroke_w}" fill="none"/>'
         )
     dot_r = int(size * 0.04)

@@ -39,4 +39,4 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
                 return ImageFont.truetype(path, size)
             except Exception:
                 continue
-    return ImageFont.load_default()
+    return ImageFont.load_default(size=size)
