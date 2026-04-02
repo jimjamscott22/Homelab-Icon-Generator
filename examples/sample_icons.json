@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Raspberry Pi 4",
+    "category": "raspberry_pi",
+    "style": "terminal",
+    "theme": "green",
+    "size": 256,
+    "format": "both"
+  },
+  {
+    "name": "Home NAS",
+    "category": "server",
+    "style": "minimal",
+    "theme": "grayscale",
+    "size": 256,
+    "format": "both"
+  },
+  {
+    "name": "Docker Host",
+    "category": "container",
+    "style": "cyberpunk",
+    "theme": "blue",
+    "size": 256,
+    "format": "both"
+  },
+  {
+    "name": "PostgreSQL",
+    "category": "database",
+    "style": "terminal",
+    "theme": "orange",
+    "size": 256,
+    "format": "both"
+  },
+  {
+    "name": "Nextcloud",
+    "category": "cloud_service",
+    "style": "minimal",
+    "theme": "purple",
+    "size": 256,
+    "format": "both"
+  },
+  {
+    "name": "pfSense Router",
+    "category": "router",
+    "style": "cyberpunk",
+    "theme": "green",
+    "size": 256,
+    "format": "both"
+  }
+]
