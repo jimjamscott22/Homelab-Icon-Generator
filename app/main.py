@@ -66,12 +66,12 @@ def run_batch(json_path: str, output_dir: str) -> None:
                 output_dir=entry.get("output_dir", output_dir),
             )
             paths = generate_icon(request)
-            print(f"  \u2713 {name}")
+            print(f"  [OK] {name}")
             for fmt, path in paths.items():
                 print(f"    [{fmt.upper()}] {path}")
             succeeded += 1
         except Exception as e:
-            print(f"  \u2717 {name}: {e}", file=sys.stderr)
+            print(f"  [FAIL] {name}: {e}", file=sys.stderr)
             failed += 1
 
     print(f"\nBatch complete: {succeeded} succeeded, {failed} failed")
