@@ -1,0 +1,7 @@
+uv run main.py \
+  --name "Raspberry Pi Server" \
+  --category raspberry_pi \
+  --style terminal \
+  --theme green \
+  --size 256 \
+  --format svg

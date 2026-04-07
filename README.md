@@ -39,7 +39,7 @@ uv run main.py \
   --style terminal \
   --theme green \
   --size 256 \
-  --format png
+  --format svg
 ```
 
 ### All CLI flags
