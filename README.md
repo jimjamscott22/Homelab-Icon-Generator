@@ -6,14 +6,14 @@ Generate clean, consistent icons for homelab devices and services using Python.
 
 Homelab Icon Generator is a Python CLI tool for creating simple, visually consistent icons for devices and services commonly found in self-hosted environments.
 
-Icons are generated programmatically using geometric shapes and text — no external icon packs required. Output is available in PNG (raster) and SVG (vector) formats, suitable for dashboards, network monitors, and internal apps.
+Icons are generated programmatically using geometric shapes and text — no external icon packs required. Output is available in PNG (raster), SVG (vector), and ICO formats, suitable for dashboards, network monitors, and internal apps.
 
 ## Features
 
-- 12 device/service categories (server, router, Raspberry Pi, container, database, and more)
+- 16 device/service categories (server, router, Raspberry Pi, container, database, and more)
 - 3 visual styles: minimal, terminal, cyberpunk
 - 5 color themes: green, blue, orange, purple, grayscale
-- PNG and SVG export
+- PNG, SVG, and ICO export
 - Automatic initials from name (e.g. "Raspberry Pi Server" → RPS)
 - Optional transparent background
 - CLI and JSON batch mode
@@ -51,7 +51,7 @@ uv run main.py \
 | `--style` | `minimal` | `minimal` / `terminal` / `cyberpunk` |
 | `--theme` | `blue` | `green` / `blue` / `orange` / `purple` / `grayscale` |
 | `--size` | `256` | Icon size in pixels (32–2048) |
-| `--format` | `both` | `png` / `svg` / `both` |
+| `--format` | `both` | `png` / `svg` / `ico` / `both` / `all` |
 | `--output-dir` | `output` | Directory to save files into |
 | `--transparent` | off | Enable transparent background |
 | `--batch` | — | Path to a JSON batch file |
@@ -62,6 +62,7 @@ uv run main.py \
 raspberry_pi  server       router        switch
 laptop        desktop      phone         iot
 container     database     cloud_service generic_service
+media         ai           camera        game_console
 ```
 
 ### Batch generation
