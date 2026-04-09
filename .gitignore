@@ -212,3 +212,4 @@ output/docker-host-cyberpunk-blue-256.png
 
 # Generated Icons
 output/*.png
+output/*.ico

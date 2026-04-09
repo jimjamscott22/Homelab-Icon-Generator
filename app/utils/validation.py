@@ -10,11 +10,12 @@ if TYPE_CHECKING:
 VALID_CATEGORIES = {
     "raspberry_pi", "server", "router", "switch", "laptop",
     "desktop", "phone", "iot", "container", "database",
-    "cloud_service", "generic_service",
+    "cloud_service", "generic_service", "media", "ai", 
+    "camera", "game_console"
 }
 VALID_STYLES = {"minimal", "terminal", "cyberpunk"}
 VALID_THEMES = {"green", "blue", "orange", "purple", "grayscale"}
-VALID_FORMATS = {"png", "svg", "both"}
+VALID_FORMATS = {"png", "svg", "ico", "both", "all"}
 
 _MIN_SIZE = 32
 _MAX_SIZE = 2048

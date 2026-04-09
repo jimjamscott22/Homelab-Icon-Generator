@@ -46,5 +46,17 @@
     "theme": "green",
     "size": 256,
     "format": "both"
+  },
+  {
+    "name": "Camera AI",
+    "category": "ai",
+    "theme": "grayscale",
+    "format": "all"
+  },
+  {
+    "name": "Media Center",
+    "category": "media",
+    "theme": "orange",
+    "format": "ico"
   }
 ]

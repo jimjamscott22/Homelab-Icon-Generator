@@ -377,20 +377,6 @@ def _svg_generic_service(cx: int, cy: int, size: int, color: str) -> str:
     return _svg_polygon(points, color)
 
 
-_SVG_SYMBOL_FUNCS = {
-    "raspberry_pi": _svg_raspberry_pi,
-    "server": _svg_server,
-    "router": _svg_router,
-    "switch": _svg_switch,
-    "laptop": _svg_laptop,
-    "desktop": _svg_desktop,
-    "phone": _svg_phone,
-    "iot": _svg_iot,
-    "container": _svg_container,
-    "database": _svg_database,
-    "cloud_service": _svg_cloud_service,
-    "generic_service": _svg_generic_service,
-}
 
 
 def _category_svg(
@@ -524,7 +510,7 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
 
     output: dict[str, str] = {}
 
-    if request.format in ("png", "both"):
+    if request.format in ("png", "both", "all"):
         img = render_png(request, style, layout)
         png_path = os.path.join(request.output_dir, f"{base}.png")
         if request.transparent_bg:
@@ -533,11 +519,84 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
             img.convert("RGB").save(png_path, format="PNG")
         output["png"] = png_path
 
-    if request.format in ("svg", "both"):
+    if request.format in ("svg", "both", "all"):
         svg_str = render_svg(request, style, layout)
         svg_path = os.path.join(request.output_dir, f"{base}.svg")
         with open(svg_path, "w", encoding="utf-8") as fh:
             fh.write(svg_str)
         output["svg"] = svg_path
 
+    if request.format in ("ico", "all"):
+        img = render_png(request, style, layout)
+        ico_path = os.path.join(request.output_dir, f"{base}.ico")
+        if request.transparent_bg:
+            img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
+        else:
+            img.convert("RGB").save(ico_path, format="ICO", sizes=[(request.size, request.size)])
+        output["ico"] = ico_path
+
     return output
+def _svg_media(cx: int, cy: int, size: int, color: str) -> str:
+    bw = int(size * 0.45)
+    bh = int(size * 0.35)
+    tw = int(size * 0.15)
+    th = int(size * 0.15)
+    points = [
+        (cx - tw // 3, cy - th // 2),
+        (cx + tw * 2 // 3, cy),
+        (cx - tw // 3, cy + th // 2),
+    ]
+    return "\n".join([
+        _svg_rect(cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2, fill="none") + " stroke=\"" + color + "\" stroke-width=\"" + str(int(size * 0.04)) + "\"",
+        _svg_polygon(points, fill=color)
+    ])
+
+def _svg_ai(cx: int, cy: int, size: int, color: str) -> str:
+    w = int(size * 0.40)
+    h = int(size * 0.35)
+    elements = [
+        _svg_rounded_rect(cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2, max(2, int(size * 0.05)), fill="none", stroke=color, stroke_width=int(size * 0.04)),
+        _svg_rect(cx - w // 4 - int(size * 0.04), cy - h // 4, cx - w // 4 + int(size * 0.04), cy - h // 4 + int(size * 0.08), fill=color),
+        _svg_rect(cx + w // 4 - int(size * 0.04), cy - h // 4, cx + w // 4 + int(size * 0.04), cy - h // 4 + int(size * 0.08), fill=color),
+        _svg_line(cx - w // 4, cy + h // 4, cx + w // 4, cy + h // 4, stroke=color, width=max(2, int(size * 0.02)))
+    ]
+    return "\n".join(elements)
+
+def _svg_camera(cx: int, cy: int, size: int, color: str) -> str:
+    bw = int(size * 0.46)
+    bh = int(size * 0.30)
+    elements = [
+        _svg_rounded_rect(cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2, max(2, int(size * 0.04)), fill="none", stroke=color, stroke_width=int(size * 0.04)),
+        _svg_circle(cx, cy, int(size * 0.10), fill=color),
+        _svg_rect(cx - int(size * 0.05), cy - bh // 2 - int(size * 0.06), cx + int(size * 0.05), cy - bh // 2, fill=color)
+    ]
+    return "\n".join(elements)
+
+def _svg_game_console(cx: int, cy: int, size: int, color: str) -> str:
+    w = int(size * 0.55)
+    h = int(size * 0.35)
+    elements = [
+        _svg_rounded_rect(cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2, int(size * 0.1), fill=color),
+        _svg_line(cx - w // 3, cy - int(size * 0.06), cx - w // 3, cy + int(size * 0.06), stroke="white", width=int(size * 0.02)),
+        _svg_circle(cx + w // 4, cy - int(size * 0.04), int(size * 0.02), fill="white")
+    ]
+    return "\n".join(elements)
+
+_SVG_SYMBOL_FUNCS = {
+    "raspberry_pi": _svg_raspberry_pi,
+    "server": _svg_server,
+    "router": _svg_router,
+    "switch": _svg_switch,
+    "laptop": _svg_laptop,
+    "desktop": _svg_desktop,
+    "phone": _svg_phone,
+    "iot": _svg_iot,
+    "container": _svg_container,
+    "database": _svg_database,
+    "cloud_service": _svg_cloud_service,
+    "generic_service": _svg_generic_service,
+    "media": _svg_media,
+    "ai": _svg_ai,
+    "camera": _svg_camera,
+    "game_console": _svg_game_console,
+}

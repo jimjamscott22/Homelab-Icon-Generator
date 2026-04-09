@@ -265,6 +265,95 @@ def draw_generic_service(
     draw_polygon(draw, points, fill=color)
 
 
+def draw_media(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Clapperboard/play button motif for media."""
+    # Outer rectangle
+    bw = int(size * 0.45)
+    bh = int(size * 0.35)
+    draw.rectangle(
+        [(cx - bw // 2, cy - bh // 2), (cx + bw // 2, cy + bh // 2)],
+        fill=None,
+        outline=color,
+        width=int(size * 0.04),
+    )
+    # play triangle outline
+    tw = int(size * 0.15)
+    th = int(size * 0.15)
+    draw_polygon(
+        draw,
+        [
+            (cx - tw // 3, cy - th // 2),
+            (cx + tw * 2 // 3, cy),
+            (cx - tw // 3, cy + th // 2),
+        ],
+        fill=color,
+    )
+
+
+def draw_ai(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Robot/brain motif."""
+    w = int(size * 0.40)
+    h = int(size * 0.35)
+    draw_rounded_rect(
+        draw,
+        [(cx - w // 2, cy - h // 2), (cx + w // 2, cy + h // 2)],
+        radius=max(2, int(size * 0.05)),
+        fill=None,
+        outline=color,
+        width=int(size * 0.04),
+    )
+    # eyes
+    eye_w = int(size * 0.08)
+    eye_h = int(size * 0.08)
+    draw.rectangle(
+        [(cx - w // 4 - eye_w // 2, cy - h // 4), (cx - w // 4 + eye_w // 2, cy - h // 4 + eye_h)], fill=color
+    )
+    draw.rectangle(
+        [(cx + w // 4 - eye_w // 2, cy - h // 4), (cx + w // 4 + eye_w // 2, cy - h // 4 + eye_h)], fill=color
+    )
+    # mouth
+    draw.line([(cx - w // 4, cy + h // 4), (cx + w // 4, cy + h // 4)], fill=color, width=max(2, int(size * 0.02)))
+
+
+def draw_camera(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Security camera / photo camera."""
+    bw = int(size * 0.46)
+    bh = int(size * 0.30)
+    draw_rounded_rect(
+        draw,
+        [(cx - bw // 2, cy - bh // 2), (cx + bw // 2, cy + bh // 2)],
+        radius=max(2, int(size * 0.04)),
+        fill=None, outline=color, width=int(size * 0.04)
+    )
+    # lens (circle in middle)
+    draw_circle(draw, (cx, cy), int(size * 0.10), fill=color)
+    # top flash
+    draw.rectangle(
+        [(cx - int(size * 0.05), cy - bh // 2 - int(size * 0.06)), (cx + int(size * 0.05), cy - bh // 2)],
+        fill=color
+    )
+
+
+def draw_game_console(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Controller motif."""
+    w = int(size * 0.55)
+    h = int(size * 0.35)
+    draw_rounded_rect(
+        draw, [(cx - w // 2, cy - h // 2), (cx + w // 2, cy + h // 2)], radius=int(size * 0.1), fill=color
+    )
+    # D-pad (left)
+    draw.line([(cx - w // 3, cy - int(size * 0.06)), (cx - w // 3, cy + int(size * 0.06))], fill=None, width=int(size * 0.02))
+    # buttons (right)
+    draw.circle((cx + w // 4, cy - int(size * 0.04)), int(size * 0.02), fill=None) # outline is solid color
+
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
@@ -282,6 +371,10 @@ SYMBOL_DRAWERS: dict[str, Callable] = {
     "database": draw_database,
     "cloud_service": draw_cloud_service,
     "generic_service": draw_generic_service,
+    "media": draw_media,
+    "ai": draw_ai,
+    "camera": draw_camera,
+    "game_console": draw_game_console,
 }
 
 
