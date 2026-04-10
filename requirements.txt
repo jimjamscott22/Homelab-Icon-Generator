@@ -1,2 +1,3 @@
 Pillow>=10.1.0
 svgwrite>=1.4.3
+Flask>=3.0.0

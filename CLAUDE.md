@@ -2,19 +2,21 @@
 
 ## Running the project
 
-Install dependencies first:
+This project uses [uv](https://docs.astral.sh/uv/) for dependency and environment management. Dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
+
+Sync the environment:
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 Single icon:
 ```bash
-python main.py --name "Nextcloud" --category cloud_service --style minimal --theme blue --size 256 --format both
+uv run python main.py --name "Nextcloud" --category cloud_service --style minimal --theme blue --size 256 --format both
 ```
 
 Batch mode:
 ```bash
-python main.py --batch examples/sample_icons.json
+uv run python main.py --batch examples/sample_icons.json
 ```
 
 Output files land in `output/` with slugified filenames: `{slug}-{style}-{theme}-{size}.{ext}`.
