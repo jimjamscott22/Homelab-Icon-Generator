@@ -585,6 +585,159 @@ def _svg_game_console(cx: int, cy: int, size: int, color: str) -> str:
     ]
     return "\n".join(elements)
 
+def _svg_cli(cx: int, cy: int, size: int, color: str) -> str:
+    lw = max(2, int(size * 0.04))
+    parts = [
+        _svg_line(cx - int(size * 0.22), cy - int(size * 0.16),
+                  cx - int(size * 0.06), cy, color, lw),
+        _svg_line(cx - int(size * 0.06), cy,
+                  cx - int(size * 0.22), cy + int(size * 0.16), color, lw),
+        _svg_rect(cx + int(size * 0.04), cy - int(size * 0.06),
+                  cx + int(size * 0.22), cy + int(size * 0.06), color),
+    ]
+    return "\n".join(parts)
+
+
+def _svg_code(cx: int, cy: int, size: int, color: str) -> str:
+    lw = max(2, int(size * 0.04))
+    parts = [
+        _svg_line(cx - int(size * 0.10), cy - int(size * 0.18),
+                  cx - int(size * 0.26), cy, color, lw),
+        _svg_line(cx - int(size * 0.26), cy,
+                  cx - int(size * 0.10), cy + int(size * 0.18), color, lw),
+        _svg_line(cx + int(size * 0.10), cy - int(size * 0.18),
+                  cx + int(size * 0.26), cy, color, lw),
+        _svg_line(cx + int(size * 0.26), cy,
+                  cx + int(size * 0.10), cy + int(size * 0.18), color, lw),
+        _svg_line(cx - int(size * 0.07), cy + int(size * 0.20),
+                  cx + int(size * 0.07), cy - int(size * 0.20), color, lw),
+    ]
+    return "\n".join(parts)
+
+
+def _svg_git_branch(cx: int, cy: int, size: int, color: str) -> str:
+    lw = max(2, int(size * 0.03))
+    node_r = int(size * 0.06)
+    trunk_x = cx - int(size * 0.12)
+    top = (trunk_x, cy - int(size * 0.22))
+    bot = (trunk_x, cy + int(size * 0.22))
+    branch = (cx + int(size * 0.20), cy)
+    parts = [
+        _svg_line(top[0], top[1], bot[0], bot[1], color, lw),
+        _svg_line(trunk_x, cy, branch[0], branch[1], color, lw),
+        _svg_circle(top[0], top[1], node_r, color),
+        _svg_circle(bot[0], bot[1], node_r, color),
+        _svg_circle(branch[0], branch[1], node_r, color),
+    ]
+    return "\n".join(parts)
+
+
+def _svg_api(cx: int, cy: int, size: int, color: str) -> str:
+    outer_r = int(size * 0.28)
+    inner_r = int(size * 0.18)
+    hole_r = int(size * 0.08)
+    lw = max(2, int(size * 0.025))
+    tw = int(size * 0.08)
+    th = int(size * 0.10)
+    parts = []
+    for i in range(8):
+        ang = math.radians(i * 45)
+        tx = cx + int((outer_r - th // 2) * math.cos(ang))
+        ty = cy + int((outer_r - th // 2) * math.sin(ang))
+        parts.append(_svg_rect(tx - tw // 2, ty - th // 2,
+                               tx + tw // 2, ty + th // 2, color))
+    parts.append(
+        f'<circle cx="{cx}" cy="{cy}" r="{inner_r}" fill="none"'
+        f' stroke="{color}" stroke-width="{lw}"/>'
+    )
+    parts.append(_svg_circle(cx, cy, hole_r, color))
+    return "\n".join(parts)
+
+
+def _svg_firewall(cx: int, cy: int, size: int, color: str) -> str:
+    lw = max(2, int(size * 0.02))
+    bw = int(size * 0.18)
+    bh = int(size * 0.12)
+    total_w = bw * 3
+    left = cx - total_w // 2
+    top = cy - int(bh * 1.5)
+    parts = [
+        f'<rect x="{left}" y="{top}" width="{total_w}" height="{bh * 3}"'
+        f' fill="none" stroke="{color}" stroke-width="{lw}"/>'
+    ]
+    # row 1 dividers
+    for i in range(1, 3):
+        x = left + i * bw
+        parts.append(_svg_line(x, top, x, top + bh, color, lw))
+    # row 2
+    y2 = top + bh
+    parts.append(_svg_line(left, y2, left + total_w, y2, color, lw))
+    for i in (1, 2):
+        x = left + bw // 2 + (i - 1) * bw
+        parts.append(_svg_line(x, y2, x, y2 + bh, color, lw))
+    x_last = left + bw // 2 + bw
+    parts.append(_svg_line(x_last, y2, x_last, y2 + bh, color, lw))
+    # row 3
+    y3 = top + 2 * bh
+    parts.append(_svg_line(left, y3, left + total_w, y3, color, lw))
+    for i in range(1, 3):
+        x = left + i * bw
+        parts.append(_svg_line(x, y3, x, y3 + bh, color, lw))
+    return "\n".join(parts)
+
+
+def _svg_vpn(cx: int, cy: int, size: int, color: str) -> str:
+    points = [
+        (cx, cy - int(size * 0.28)),
+        (cx + int(size * 0.24), cy - int(size * 0.16)),
+        (cx + int(size * 0.20), cy + int(size * 0.18)),
+        (cx, cy + int(size * 0.30)),
+        (cx - int(size * 0.20), cy + int(size * 0.18)),
+        (cx - int(size * 0.24), cy - int(size * 0.16)),
+    ]
+    return _svg_polygon(points, color)
+
+
+def _svg_nas(cx: int, cy: int, size: int, color: str) -> str:
+    bw = int(size * 0.55)
+    bh = int(size * 0.12)
+    gap = int(size * 0.04)
+    total_h = 3 * bh + 2 * gap
+    top = cy - total_h // 2
+    radius = max(2, int(size * 0.02))
+    dot_r = int(size * 0.025)
+    lw = max(2, int(size * 0.02))
+    parts = []
+    for i in range(3):
+        y = top + i * (bh + gap)
+        parts.append(_svg_rounded_rect(
+            cx - bw // 2, y, cx + bw // 2, y + bh, radius,
+            fill="none", stroke=color, stroke_width=lw,
+        ))
+        parts.append(_svg_circle(
+            cx + bw // 2 - int(size * 0.06), y + bh // 2, dot_r, color,
+        ))
+    return "\n".join(parts)
+
+
+def _svg_power(cx: int, cy: int, size: int, color: str) -> str:
+    r = int(size * 0.26)
+    lw = max(2, int(size * 0.05))
+    # arc from 300° to 240° going clockwise (the long way around the bottom)
+    sx = cx + int(r * math.cos(math.radians(300)))
+    sy = cy + int(r * math.sin(math.radians(300)))
+    ex = cx + int(r * math.cos(math.radians(240)))
+    ey = cy + int(r * math.sin(math.radians(240)))
+    parts = [
+        f'<path d="M {sx} {sy} A {r} {r} 0 1 1 {ex} {ey}"'
+        f' fill="none" stroke="{color}" stroke-width="{lw}"'
+        f' stroke-linecap="round"/>',
+        _svg_line(cx, cy - r - int(size * 0.04),
+                  cx, cy - int(size * 0.02), color, lw),
+    ]
+    return "\n".join(parts)
+
+
 _SVG_SYMBOL_FUNCS = {
     "raspberry_pi": _svg_raspberry_pi,
     "server": _svg_server,
@@ -602,4 +755,12 @@ _SVG_SYMBOL_FUNCS = {
     "ai": _svg_ai,
     "camera": _svg_camera,
     "game_console": _svg_game_console,
+    "cli": _svg_cli,
+    "code": _svg_code,
+    "git_branch": _svg_git_branch,
+    "api": _svg_api,
+    "firewall": _svg_firewall,
+    "vpn": _svg_vpn,
+    "nas": _svg_nas,
+    "power": _svg_power,
 }

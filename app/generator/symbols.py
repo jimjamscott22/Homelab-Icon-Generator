@@ -354,6 +354,208 @@ def draw_game_console(
     # buttons (right)
     draw.circle((cx + w // 4, cy - int(size * 0.04)), int(size * 0.02), fill=None) # outline is solid color
 
+def draw_cli(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Terminal prompt: '>' chevron + filled cursor block."""
+    lw = max(2, int(size * 0.04))
+    # chevron arrow '>'
+    draw.line(
+        [(cx - int(size * 0.22), cy - int(size * 0.16)),
+         (cx - int(size * 0.06), cy)],
+        fill=color, width=lw,
+    )
+    draw.line(
+        [(cx - int(size * 0.06), cy),
+         (cx - int(size * 0.22), cy + int(size * 0.16))],
+        fill=color, width=lw,
+    )
+    # cursor block
+    draw.rectangle(
+        [(cx + int(size * 0.04), cy - int(size * 0.06)),
+         (cx + int(size * 0.22), cy + int(size * 0.06))],
+        fill=color,
+    )
+
+
+def draw_code(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Code brackets motif: '< / >'."""
+    lw = max(2, int(size * 0.04))
+    # left angle '<'
+    draw.line(
+        [(cx - int(size * 0.10), cy - int(size * 0.18)),
+         (cx - int(size * 0.26), cy)],
+        fill=color, width=lw,
+    )
+    draw.line(
+        [(cx - int(size * 0.26), cy),
+         (cx - int(size * 0.10), cy + int(size * 0.18))],
+        fill=color, width=lw,
+    )
+    # right angle '>'
+    draw.line(
+        [(cx + int(size * 0.10), cy - int(size * 0.18)),
+         (cx + int(size * 0.26), cy)],
+        fill=color, width=lw,
+    )
+    draw.line(
+        [(cx + int(size * 0.26), cy),
+         (cx + int(size * 0.10), cy + int(size * 0.18))],
+        fill=color, width=lw,
+    )
+    # slash '/'
+    draw.line(
+        [(cx - int(size * 0.07), cy + int(size * 0.20)),
+         (cx + int(size * 0.07), cy - int(size * 0.20))],
+        fill=color, width=lw,
+    )
+
+
+def draw_git_branch(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Git branch motif: trunk with two nodes + branch node off to the side."""
+    lw = max(2, int(size * 0.03))
+    node_r = int(size * 0.06)
+    trunk_x = cx - int(size * 0.12)
+    top = (trunk_x, cy - int(size * 0.22))
+    bot = (trunk_x, cy + int(size * 0.22))
+    branch = (cx + int(size * 0.20), cy)
+    # trunk
+    draw.line([top, bot], fill=color, width=lw)
+    # branch arc (approx with diagonal line)
+    draw.line([(trunk_x, cy), branch], fill=color, width=lw)
+    for pt in (top, bot, branch):
+        draw_circle(draw, pt, node_r, fill=color)
+
+
+def draw_api(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Gear motif: ring + 8 rectangular teeth."""
+    outer_r = int(size * 0.28)
+    inner_r = int(size * 0.18)
+    hole_r = int(size * 0.08)
+    lw = max(2, int(size * 0.025))
+    # teeth
+    tw = int(size * 0.08)
+    th = int(size * 0.10)
+    for i in range(8):
+        ang = math.radians(i * 45)
+        tx = cx + int((outer_r - th // 2) * math.cos(ang))
+        ty = cy + int((outer_r - th // 2) * math.sin(ang))
+        draw.rectangle(
+            [(tx - tw // 2, ty - th // 2), (tx + tw // 2, ty + th // 2)],
+            fill=color,
+        )
+    # ring
+    draw_circle(draw, (cx, cy), inner_r, fill=None, outline=color, width=lw)
+    # hub
+    draw_circle(draw, (cx, cy), hole_r, fill=color)
+
+
+def draw_firewall(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Brick wall pattern (3 staggered rows)."""
+    lw = max(2, int(size * 0.02))
+    bw = int(size * 0.18)
+    bh = int(size * 0.12)
+    total_w = bw * 3
+    left = cx - total_w // 2
+    top = cy - int(bh * 1.5)
+    # outer outline
+    draw.rectangle(
+        [(left, top), (left + total_w, top + bh * 3)],
+        fill=None, outline=color, width=lw,
+    )
+    # row 1: 3 full bricks
+    for i in range(1, 3):
+        x = left + i * bw
+        draw.line([(x, top), (x, top + bh)], fill=color, width=lw)
+    # row 2: offset (half + 2 full + half)
+    y2 = top + bh
+    draw.line([(left, y2), (left + total_w, y2)], fill=color, width=lw)
+    for i in (1, 2):
+        x = left + bw // 2 + (i - 1) * bw
+        draw.line([(x, y2), (x, y2 + bh)], fill=color, width=lw)
+    x_last = left + bw // 2 + bw
+    draw.line([(x_last, y2), (x_last, y2 + bh)], fill=color, width=lw)
+    # row 3: 3 full bricks
+    y3 = top + 2 * bh
+    draw.line([(left, y3), (left + total_w, y3)], fill=color, width=lw)
+    for i in range(1, 3):
+        x = left + i * bw
+        draw.line([(x, y3), (x, y3 + bh)], fill=color, width=lw)
+
+
+def draw_vpn(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Shield with keyhole (lock motif)."""
+    # shield polygon
+    points = [
+        (cx, cy - int(size * 0.28)),
+        (cx + int(size * 0.24), cy - int(size * 0.16)),
+        (cx + int(size * 0.20), cy + int(size * 0.18)),
+        (cx, cy + int(size * 0.30)),
+        (cx - int(size * 0.20), cy + int(size * 0.18)),
+        (cx - int(size * 0.24), cy - int(size * 0.16)),
+    ]
+    draw_polygon(draw, points, fill=color)
+    # keyhole (negative space — overdraw with bg-ish; use small contrasting circle)
+    # keep monochrome: draw small circle as cutout-style with second smaller fill
+    # Simpler: leave shield solid, no keyhole (still reads as VPN/shield).
+
+
+def draw_nas(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Stacked disk bays (3 horizontal slots with status dots)."""
+    bw = int(size * 0.55)
+    bh = int(size * 0.12)
+    gap = int(size * 0.04)
+    total_h = 3 * bh + 2 * gap
+    top = cy - total_h // 2
+    radius = max(2, int(size * 0.02))
+    dot_r = int(size * 0.025)
+    for i in range(3):
+        y = top + i * (bh + gap)
+        draw_rounded_rect(
+            draw,
+            [(cx - bw // 2, y), (cx + bw // 2, y + bh)],
+            radius=radius,
+            fill=None, outline=color, width=max(2, int(size * 0.02)),
+        )
+        # status dot on the right
+        draw_circle(
+            draw,
+            (cx + bw // 2 - int(size * 0.06), y + bh // 2),
+            dot_r, fill=color,
+        )
+
+
+def draw_power(
+    draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color: str
+) -> None:
+    """Power button: arc with vertical bar through the gap at top."""
+    r = int(size * 0.26)
+    lw = max(2, int(size * 0.05))
+    # arc from 30° to 330° (gap at top)
+    draw.arc(
+        [(cx - r, cy - r), (cx + r, cy + r)],
+        start=300, end=240,
+        fill=color, width=lw,
+    )
+    # vertical bar
+    draw.line(
+        [(cx, cy - r - int(size * 0.04)), (cx, cy - int(size * 0.02))],
+        fill=color, width=lw,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
@@ -375,6 +577,14 @@ SYMBOL_DRAWERS: dict[str, Callable] = {
     "ai": draw_ai,
     "camera": draw_camera,
     "game_console": draw_game_console,
+    "cli": draw_cli,
+    "code": draw_code,
+    "git_branch": draw_git_branch,
+    "api": draw_api,
+    "firewall": draw_firewall,
+    "vpn": draw_vpn,
+    "nas": draw_nas,
+    "power": draw_power,
 }
 
 

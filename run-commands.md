@@ -2,52 +2,44 @@
 
 Use these examples to generate different icon types and styles.
 
-## 1) Raspberry Pi (Terminal, Green, SVG)
+All commands follow the same template:
+
 ```bash
-uv run main.py --name "Pi Node" --category raspberry_pi --style terminal --theme green --size 256 --format svg
+uv run main.py --name "<NAME>" --category <CATEGORY> --style <STYLE> --theme <THEME> --size <SIZE> --format <FORMAT>
 ```
 
-## 2) Server (Minimal, Blue, PNG+SVG)
-```bash
-uv run main.py --name "Main Server" --category server --style minimal --theme blue --size 256 --format both
-```
+Pick a row and substitute the values:
 
-## 3) Router (Cyberpunk, Orange, PNG)
-```bash
-uv run main.py --name "Edge Router" --category router --style cyberpunk --theme orange --size 512 --format png
-```
+| #  | Name           | Category       | Style     | Theme     | Size | Format |
+|----|----------------|----------------|-----------|-----------|------|--------|
+| 1  | Pi Node        | raspberry_pi   | terminal  | green     | 256  | svg    |
+| 2  | Main Server    | server         | minimal   | blue      | 256  | both   |
+| 3  | Edge Router    | router         | cyberpunk | orange    | 512  | png    |
+| 4  | Core Switch    | switch         | terminal  | grayscale | 256  | ico    |
+| 5  | Dev Laptop     | laptop         | minimal   | purple    | 128  | all    |
+| 6  | Workstation    | desktop        | cyberpunk | blue      | 512  | svg    |
+| 7  | Mobile App     | phone          | minimal   | orange    | 256  | both   |
+| 8  | Sensor Hub     | iot            | terminal  | green     | 256  | png    |
+| 9  | Docker Stack   | container      | cyberpunk | purple    | 256  | both   |
+| 10 | Postgres DB    | database       | minimal   | blue      | 256  | all    |
+| 11 | Shell Prompt   | cli            | terminal  | green     | 256  | svg    |
+| 12 | Source Code    | code           | minimal   | purple    | 256  | both   |
+| 13 | Git Repo       | git_branch     | cyberpunk | orange    | 512  | png    |
+| 14 | API Gateway    | api            | minimal   | blue      | 256  | all    |
+| 15 | Edge Firewall  | firewall       | terminal  | orange    | 256  | both   |
+| 16 | WireGuard VPN  | vpn            | cyberpunk | purple    | 512  | svg    |
+| 17 | Synology NAS   | nas            | minimal   | grayscale | 256  | both   |
+| 18 | PDU            | power          | cyberpunk | green     | 256  | ico    |
 
-## 4) Switch (Terminal, Grayscale, ICO)
-```bash
-uv run main.py --name "Core Switch" --category switch --style terminal --theme grayscale --size 256 --format ico
-```
+## Valid values
 
-## 5) Laptop (Minimal, Purple, All formats)
-```bash
-uv run main.py --name "Dev Laptop" --category laptop --style minimal --theme purple --size 128 --format all
-```
-
-## 6) Desktop (Cyberpunk, Blue, SVG)
-```bash
-uv run main.py --name "Workstation" --category desktop --style cyberpunk --theme blue --size 512 --format svg
-```
-
-## 7) Phone (Minimal, Orange, PNG+SVG)
-```bash
-uv run main.py --name "Mobile App" --category phone --style minimal --theme orange --size 256 --format both
-```
-
-## 8) IoT (Terminal, Green, PNG)
-```bash
-uv run main.py --name "Sensor Hub" --category iot --style terminal --theme green --size 256 --format png
-```
-
-## 9) Container (Cyberpunk, Purple, PNG+SVG)
-```bash
-uv run main.py --name "Docker Stack" --category container --style cyberpunk --theme purple --size 256 --format both
-```
-
-## 10) Database (Minimal, Blue, All formats)
-```bash
-uv run main.py --name "Postgres DB" --category database --style minimal --theme blue --size 256 --format all
-```
+- **category**: `raspberry_pi`, `server`, `router`, `switch`, `laptop`, `desktop`, `phone`, `iot`, `container`, `database`, `cloud_service`, `generic_service`, `media`, `ai`, `camera`, `game_console`, `cli`, `code`, `git_branch`, `api`, `firewall`, `vpn`, `nas`, `power`
+- **style**: `minimal`, `terminal`, `cyberpunk`
+- **theme**: `green`, `blue`, `orange`, `purple`, `grayscale`
+- **format**: `png`, `svg`, `ico`, `both` (png + svg), `all` (png + svg + ico)
+- **size**: integer between `32` and `2048`. Common sizes:
+  - `16`, `32`, `48` — favicons, system tray, file manager thumbnails (note: `16` and `48` are below the `32` minimum; use `32` as the floor)
+  - `64`, `128` — desktop shortcuts, dock icons (macOS), taskbar
+  - `256` — high-DPI desktop icons, Windows `.ico` standard, app launchers
+  - `512` — macOS app icons, retina displays, Homepage/Homer dashboard tiles
+  - `1024`, `2048` — App Store / marketing assets, print, source masters

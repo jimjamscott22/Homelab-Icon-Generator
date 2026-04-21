@@ -10,8 +10,10 @@ if TYPE_CHECKING:
 VALID_CATEGORIES = {
     "raspberry_pi", "server", "router", "switch", "laptop",
     "desktop", "phone", "iot", "container", "database",
-    "cloud_service", "generic_service", "media", "ai", 
-    "camera", "game_console"
+    "cloud_service", "generic_service", "media", "ai",
+    "camera", "game_console",
+    "cli", "code", "git_branch", "api",
+    "firewall", "vpn", "nas", "power",
 }
 VALID_STYLES = {"minimal", "terminal", "cyberpunk"}
 VALID_THEMES = {"green", "blue", "orange", "purple", "grayscale"}
