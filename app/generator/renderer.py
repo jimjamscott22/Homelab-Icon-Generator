@@ -503,16 +503,19 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
 
     layout = get_layout(request.size, style.font_scale)
 
-    os.makedirs(request.output_dir, exist_ok=True)
-
     slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
     base = f"{slug}-{request.style}-{request.theme}-{request.size}"
+
+    def _path_for(ext: str) -> str:
+        dest_dir = os.path.join(request.output_dir, ext, request.category)
+        os.makedirs(dest_dir, exist_ok=True)
+        return os.path.join(dest_dir, f"{base}.{ext}")
 
     output: dict[str, str] = {}
 
     if request.format in ("png", "both", "all"):
         img = render_png(request, style, layout)
-        png_path = os.path.join(request.output_dir, f"{base}.png")
+        png_path = _path_for("png")
         if request.transparent_bg:
             img.save(png_path, format="PNG")
         else:
@@ -521,14 +524,14 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
 
     if request.format in ("svg", "both", "all"):
         svg_str = render_svg(request, style, layout)
-        svg_path = os.path.join(request.output_dir, f"{base}.svg")
+        svg_path = _path_for("svg")
         with open(svg_path, "w", encoding="utf-8") as fh:
             fh.write(svg_str)
         output["svg"] = svg_path
 
     if request.format in ("ico", "all"):
         img = render_png(request, style, layout)
-        ico_path = os.path.join(request.output_dir, f"{base}.ico")
+        ico_path = _path_for("ico")
         if request.transparent_bg:
             img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         else:

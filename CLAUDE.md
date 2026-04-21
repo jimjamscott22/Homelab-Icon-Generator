@@ -19,7 +19,7 @@ Batch mode:
 uv run python main.py --batch examples/sample_icons.json
 ```
 
-Output files land in `output/` with slugified filenames: `{slug}-{style}-{theme}-{size}.{ext}`.
+Output files land in `output/{format}/{category}/` with slugified filenames: `{slug}-{style}-{theme}-{size}.{ext}` — e.g. `output/png/cloud_service/nextcloud-minimal-blue-256.png`. Subdirectories are created lazily on first write.
 
 ## Architecture
 
@@ -33,7 +33,7 @@ CLI args / JSON entry
     → get_style (app/styles/<style>.py)            # palette → StyleDefinition
     → get_layout (app/generator/layouts.py)        # size → LayoutSpec
     → render_png / render_svg (app/generator/renderer.py)
-    → save to output/
+    → save to output/{format}/{category}/
 ```
 
 ## Key design decisions
