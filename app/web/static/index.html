@@ -48,15 +48,18 @@ body {
     var(--bg);
 }
 
-/* film grain */
+/* film grain — static dotted pattern, cheap to paint (no SVG filter, no blend mode) */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 .86 0 0 0 0 .6 0 0 0 .09 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  mix-blend-mode: overlay;
-  opacity: .55;
+  background-image:
+    radial-gradient(rgba(255,220,153,.22) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(255,220,153,.14) 0.5px, transparent 0.5px);
+  background-size: 3px 3px, 5px 5px;
+  background-position: 0 0, 1px 2px;
+  opacity: .35;
   z-index: 100;
 }
 
@@ -1303,6 +1306,7 @@ function log(msg, cls = "") {
 
 /* ============ CLOCK / UPTIME ============ */
 const started = Date.now();
+let clockTimer = null;
 function tickClock() {
   const d = new Date();
   $("clock").textContent = d.toTimeString().slice(0, 8);
@@ -1311,7 +1315,23 @@ function tickClock() {
   const ss = String(s % 60).padStart(2, "0");
   $("uptime").textContent = `${mm}:${ss}`;
 }
-setInterval(tickClock, 1000); tickClock();
+function startClock() {
+  if (clockTimer == null) {
+    tickClock();
+    clockTimer = setInterval(tickClock, 1000);
+  }
+}
+function stopClock() {
+  if (clockTimer != null) {
+    clearInterval(clockTimer);
+    clockTimer = null;
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopClock();
+  else startClock();
+});
+startClock();
 
 /* ============ SESSION ID ============ */
 $("sess").textContent = Math.random().toString(16).slice(2, 8).toUpperCase();
@@ -1384,8 +1404,6 @@ function onBuildSuccess(data) {
   $("mStatus").textContent = "BUILT";
   $("mStatus").className = "ok";
   $("mStatus").style.color = "";
-  $("mStatus").classList.add("amber");
-  $("mStatus").style.color = "var(--moss)";
   $("mCat").textContent = data.category.replace(/_/g, " ").toUpperCase();
   $("mStyle").textContent = data.style.toUpperCase();
   $("mTheme").textContent = data.theme.toUpperCase();
@@ -1452,8 +1470,9 @@ function renderRecent() {
     );
     strip.append(slot);
   });
-  // fill empty slots
-  for (let i = state.recent.length; i < 6; i++) {
+  // pad with empty slots up to 6 (no-op once we have 6+ filled)
+  const pad = Math.max(0, 6 - state.recent.length);
+  for (let i = 0; i < pad; i++) {
     strip.append(el("div", { class: "slot" }));
   }
 }

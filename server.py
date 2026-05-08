@@ -69,7 +69,10 @@ def generate():
     except Exception as exc:
         return jsonify({"error": f"generation failed: {exc}"}), 500
 
-    files = {fmt: f"/output/{Path(p).name}" for fmt, p in paths.items()}
+    files = {
+        fmt: f"/output/{Path(p).resolve().relative_to(OUTPUT_DIR.resolve()).as_posix()}"
+        for fmt, p in paths.items()
+    }
     return jsonify(
         {
             "files": files,
@@ -93,4 +96,5 @@ def serve_output(filename: str):
 if __name__ == "__main__":
     OUTPUT_DIR.mkdir(exist_ok=True)
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="127.0.0.1", port=port, debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="127.0.0.1", port=port, debug=debug)
