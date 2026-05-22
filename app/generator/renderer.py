@@ -5,18 +5,25 @@ from __future__ import annotations
 import math
 import os
 import re
+import importlib
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw
 
+from app.generator.colors import get_palette
+from app.generator.layouts import get_layout
 from app.generator.layouts import LayoutSpec
 from app.generator.shapes import draw_rounded_rect
 from app.generator.symbols import draw_symbol
 from app.generator.text_utils import render_initials
 from app.styles.base import StyleDefinition
+from app.utils.validation import validate_request
 
 if TYPE_CHECKING:
     from app.models.icon_request import IconRequest
+
+_CREATED_OUTPUT_DIRS: set[str] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -27,6 +34,18 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert a hex color string (e.g. '#1a2b3c') to an (R, G, B) tuple."""
     h = hex_color.lstrip("#")
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+@lru_cache(maxsize=64)
+def _resolve_style(style_name: str, theme: str) -> StyleDefinition:
+    palette = get_palette(theme)
+    style_mod = importlib.import_module(f"app.styles.{style_name}")
+    return style_mod.get_style(palette)
+
+
+@lru_cache(maxsize=64)
+def _resolve_layout(size: int, font_scale: float) -> LayoutSpec:
+    return get_layout(size, font_scale)
 
 
 # ---------------------------------------------------------------------------
@@ -488,38 +507,38 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
     The returned dict contains keys "png" and/or "svg" depending on the
     requested format, mapping to the absolute file paths of the saved files.
     """
-    import importlib
-
-    from app.generator.colors import get_palette
-    from app.generator.layouts import get_layout
-    from app.utils.validation import validate_request
-
     validate_request(request)
 
-    palette = get_palette(request.theme)
-
-    style_mod = importlib.import_module(f"app.styles.{request.style}")
-    style: StyleDefinition = style_mod.get_style(palette)
-
-    layout = get_layout(request.size, style.font_scale)
+    style = _resolve_style(request.style, request.theme)
+    layout = _resolve_layout(request.size, style.font_scale)
 
     slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
     base = f"{slug}-{request.style}-{request.theme}-{request.size}"
 
     def _path_for(ext: str) -> str:
         dest_dir = os.path.join(request.output_dir, ext, request.category)
-        os.makedirs(dest_dir, exist_ok=True)
+        if dest_dir not in _CREATED_OUTPUT_DIRS:
+            os.makedirs(dest_dir, exist_ok=True)
+            _CREATED_OUTPUT_DIRS.add(dest_dir)
         return os.path.join(dest_dir, f"{base}.{ext}")
 
     output: dict[str, str] = {}
+    needs_png = request.format in ("png", "both", "all")
+    needs_ico = request.format in ("ico", "all")
+    base_img: Image.Image | None = None
+    base_img_rgb: Image.Image | None = None
+    if needs_png or needs_ico:
+        base_img = render_png(request, style, layout)
+        if not request.transparent_bg:
+            base_img_rgb = base_img.convert("RGB")
 
-    if request.format in ("png", "both", "all"):
-        img = render_png(request, style, layout)
+    if needs_png and base_img is not None:
         png_path = _path_for("png")
         if request.transparent_bg:
-            img.save(png_path, format="PNG")
+            base_img.save(png_path, format="PNG")
         else:
-            img.convert("RGB").save(png_path, format="PNG")
+            png_img = base_img_rgb if base_img_rgb is not None else base_img.convert("RGB")
+            png_img.save(png_path, format="PNG")
         output["png"] = png_path
 
     if request.format in ("svg", "both", "all"):
@@ -529,13 +548,13 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
             fh.write(svg_str)
         output["svg"] = svg_path
 
-    if request.format in ("ico", "all"):
-        img = render_png(request, style, layout)
+    if needs_ico and base_img is not None:
         ico_path = _path_for("ico")
         if request.transparent_bg:
-            img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
+            base_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         else:
-            img.convert("RGB").save(ico_path, format="ICO", sizes=[(request.size, request.size)])
+            ico_img = base_img_rgb if base_img_rgb is not None else base_img.convert("RGB")
+            ico_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         output["ico"] = ico_path
 
     return output
