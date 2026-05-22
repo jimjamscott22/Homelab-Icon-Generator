@@ -53,7 +53,7 @@ def _iter_batch_entries(json_path: str) -> Iterator[dict[str, Any]]:
         first = ""
         while not first:
             chunk = f.read(1024)
-            if chunk == "":
+            if not chunk:
                 return
             for ch in chunk:
                 if not ch.isspace():
