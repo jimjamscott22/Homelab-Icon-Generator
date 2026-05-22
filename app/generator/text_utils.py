@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 
 from PIL import ImageDraw, ImageFont
 
@@ -23,8 +24,20 @@ def render_initials(
     draw.text((x, y), text, font=font, fill=color)
 
 
+@lru_cache(maxsize=64)
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Try common monospace font paths; fall back to Pillow default."""
+    path = _find_font_path()
+    if path is not None:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default(size=size)
+
+
+@lru_cache(maxsize=1)
+def _find_font_path() -> str | None:
     candidates = [
         "C:/Windows/Fonts/consola.ttf",                              # Windows Consolas
         "C:/Windows/Fonts/cour.ttf",                                 # Windows Courier New
@@ -35,8 +48,5 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     ]
     for path in candidates:
         if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                continue
-    return ImageFont.load_default(size=size)
+            return path
+    return None

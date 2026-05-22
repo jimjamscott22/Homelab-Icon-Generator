@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+from typing import Any, Iterator
 
 from app.generator.renderer import generate_icon
 from app.models.icon_request import IconRequest
@@ -46,13 +47,40 @@ def run_single(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _iter_batch_entries(json_path: str) -> Iterator[dict[str, Any]]:
+    """Yield icon entries from JSON array files or NDJSON files."""
+    with open(json_path, encoding="utf-8") as f:
+        first = ""
+        while True:
+            ch = f.read(1)
+            if ch == "":
+                return
+            if not ch.isspace():
+                first = ch
+                break
+        f.seek(0)
+
+        if first == "[":
+            entries = json.load(f)
+            for entry in entries:
+                if isinstance(entry, dict):
+                    yield entry
+            return
+
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            entry = json.loads(stripped)
+            if isinstance(entry, dict):
+                yield entry
+
+
 def run_batch(json_path: str, output_dir: str) -> None:
-    """Load a JSON array of icon configs and generate each one."""
-    with open(json_path) as f:
-        entries = json.load(f)
+    """Load a batch file and generate each icon entry."""
 
     succeeded, failed = 0, 0
-    for i, entry in enumerate(entries):
+    for i, entry in enumerate(_iter_batch_entries(json_path)):
         name = entry.get("name", f"entry-{i}")
         try:
             request = IconRequest(
