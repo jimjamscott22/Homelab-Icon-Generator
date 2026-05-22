@@ -7,7 +7,7 @@ import os
 import re
 import importlib
 from functools import lru_cache
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw
 
@@ -537,7 +537,8 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
         if request.transparent_bg:
             base_img.save(png_path, format="PNG")
         else:
-            cast(Image.Image, base_img_rgb).save(png_path, format="PNG")
+            png_img = base_img_rgb if base_img_rgb is not None else base_img.convert("RGB")
+            png_img.save(png_path, format="PNG")
         output["png"] = png_path
 
     if request.format in ("svg", "both", "all"):
@@ -552,9 +553,8 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
         if request.transparent_bg:
             base_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         else:
-            cast(Image.Image, base_img_rgb).save(
-                ico_path, format="ICO", sizes=[(request.size, request.size)]
-            )
+            ico_img = base_img_rgb if base_img_rgb is not None else base_img.convert("RGB")
+            ico_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         output["ico"] = ico_path
 
     return output
