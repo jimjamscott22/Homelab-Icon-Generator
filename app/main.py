@@ -51,13 +51,14 @@ def _iter_batch_entries(json_path: str) -> Iterator[dict[str, Any]]:
     """Yield icon entries from JSON array files or NDJSON files."""
     with open(json_path, encoding="utf-8") as f:
         first = ""
-        while True:
-            ch = f.read(1)
-            if ch == "":
+        while not first:
+            chunk = f.read(1024)
+            if chunk == "":
                 return
-            if not ch.isspace():
-                first = ch
-                break
+            for ch in chunk:
+                if not ch.isspace():
+                    first = ch
+                    break
         f.seek(0)
 
         if first == "[":

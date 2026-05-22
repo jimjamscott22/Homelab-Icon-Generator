@@ -537,7 +537,8 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
         if request.transparent_bg:
             base_img.save(png_path, format="PNG")
         else:
-            assert base_img_rgb is not None
+            if base_img_rgb is None:
+                raise RuntimeError("Expected RGB base image for non-transparent PNG output.")
             base_img_rgb.save(png_path, format="PNG")
         output["png"] = png_path
 
@@ -553,7 +554,8 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
         if request.transparent_bg:
             base_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         else:
-            assert base_img_rgb is not None
+            if base_img_rgb is None:
+                raise RuntimeError("Expected RGB base image for non-transparent ICO output.")
             base_img_rgb.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
         output["ico"] = ico_path
 
