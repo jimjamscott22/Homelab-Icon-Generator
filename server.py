@@ -8,7 +8,9 @@ Then open http://127.0.0.1:5000 in a browser.
 
 from __future__ import annotations
 
+import collections
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -28,6 +30,25 @@ STATIC_DIR = ROOT / "app" / "web" / "static"
 OUTPUT_DIR = ROOT / "output"
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
+
+# Sliding-window rate limiter for /api/generate (no external dependency needed).
+# Protects against memory pressure on low-power hosts (Pi) if the server is
+# ever bound to a non-loopback address.
+_RATE_LIMIT = int(os.environ.get("GENERATE_RATE_LIMIT", 20))  # requests
+_RATE_WINDOW = int(os.environ.get("GENERATE_RATE_WINDOW", 60))  # seconds
+_req_times: collections.deque[float] = collections.deque()
+_rate_lock = threading.Lock()
+
+
+def _allow_request() -> bool:
+    now = time.monotonic()
+    with _rate_lock:
+        while _req_times and now - _req_times[0] > _RATE_WINDOW:
+            _req_times.popleft()
+        if len(_req_times) >= _RATE_LIMIT:
+            return False
+        _req_times.append(now)
+        return True
 
 
 @app.route("/")
@@ -49,6 +70,8 @@ def options():
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
+    if not _allow_request():
+        return jsonify({"error": "rate limit exceeded — try again shortly"}), 429
     data = request.get_json(silent=True) or {}
     try:
         req = IconRequest(
@@ -88,9 +111,19 @@ def generate():
     )
 
 
-@app.route("/output/<path:filename>")
-def serve_output(filename: str):
-    return send_from_directory(OUTPUT_DIR, filename)
+_OUTPUT_FORMATS = frozenset({"png", "svg"})
+_OUTPUT_EXTS = frozenset({".png", ".svg"})
+
+
+@app.route("/output/<fmt>/<category>/<filename>")
+def serve_output(fmt: str, category: str, filename: str):
+    if fmt not in _OUTPUT_FORMATS or category not in VALID_CATEGORIES:
+        return "", 404
+    if Path(filename).suffix not in _OUTPUT_EXTS:
+        return "", 404
+    resp = send_from_directory(OUTPUT_DIR / fmt / category, filename)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
 
 
 if __name__ == "__main__":

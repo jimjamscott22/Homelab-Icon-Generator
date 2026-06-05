@@ -4,7 +4,7 @@ Punch list of issues found while reviewing `server.py` and `app/web/static/index
 
 ## Bugs & correctness
 
-### 1. Directory traversal surface area on `/output/<path:filename>`
+### 1. Directory traversal surface area on `/output/<path:filename>` ✅ DONE
 
 `server.py:88` — `serve_output` accepts any path under `output/`. Flask's `send_from_directory` blocks `..` traversal, but the route is broader than needed. Lock it down to a known subtree (e.g. `/output/<fmt>/<category>/<filename>`) or at least validate the extension is `.png` or `.svg`.
 
@@ -43,24 +43,24 @@ files = {fmt: f"/output/{Path(p).relative_to(OUTPUT_DIR).as_posix()}" for fmt, p
 
 `index.html:1314` — `setInterval(tickClock, 1000)` runs forever. Pause via `visibilitychange`, or use `document.hidden` check inside the tick.
 
-### 8. Recent strip rebuilds DOM on every build
+### 8. Recent strip rebuilds DOM on every build ✅ DONE
 
 `index.html:1430` — `renderRecent` runs on every successful build and rebuilds 10+ DOM nodes including `<img>` elements that re-fetch. Set `loading="lazy"` and reuse nodes when possible.
 
-### 9. 39 KB single-file HTML
+### 9. 39 KB single-file HTML ✅ DONE
 
 ~960 lines of CSS inlined. Splitting into `/static/app.css` and `/static/app.js` lets the browser cache across reloads.
 
 ## Code quality
 
-### 10. No `Cache-Control` on `/output/...`
+### 10. No `Cache-Control` on `/output/...` ✅ DONE
 
 Generated artifacts can be cached aggressively — their filenames are content-addressed by params (`{slug}-{style}-{theme}-{size}.{ext}`).
 
-### 11. No rate limiting on `/api/generate`
+### 11. No rate limiting on `/api/generate` ✅ DONE
 
 Fine for localhost, but binding to anything other than 127.0.0.1 would be risky — size goes up to 2048px (memory pressure on a Pi).
 
-### 12. Fragile clipboard parsing
+### 12. Fragile clipboard parsing ✅ DONE
 
 `index.html:1287` — `innerText.replace(/\s+\\\s+/g, " ")` reconstructs the command from rendered HTML. Build the plain string in `syncCli` and stash it on a closure variable or data attribute.
