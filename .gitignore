@@ -199,9 +199,6 @@ cython_debug/
 .worktrees/
 
 # Generated Icons
-output/*.png
-output/*.ico
-output/png/api/api-gateway-minimal-blue-256.png
-output/png/firewall/test-terminal-green-256.png
-output/svg/api/api-gateway-minimal-blue-256.svg
-output/svg/power/test-cyberpunk-orange-256.svg
+output/png/**
+output/svg/**
+!output/.gitkeep

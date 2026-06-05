@@ -96,6 +96,34 @@ uv run main.py --batch examples/sample_icons.json
 
 Each entry uses the same keys as the CLI flags. All fields except `name` and `category` are optional and fall back to defaults.
 
+## Web UI
+
+Start the local web server:
+
+```bash
+uv run python server.py
+```
+
+Then open http://127.0.0.1:5000 in your browser.
+
+![Web UI](web-shot.png)
+
+What the UI does: it lets you pick a category, style, theme, size, and format, then generates icons on demand and shows the resulting files for download.
+
+Generated files are served from `/output/<path>` and written to the local `output/` directory.
+
+On disk, files are written under `output/{format}/{category}/` with slugified filenames.
+
+Other storage options:
+
+- Change `OUTPUT_DIR` in `server.py` to point at a different location.
+- Replace `output/` with a symlink to a folder on another disk or a synced directory.
+
+Optional environment variables:
+
+- `PORT` to change the port (default `5000`)
+- `FLASK_DEBUG=1` to enable debug mode
+
 ## Project structure
 
 ```

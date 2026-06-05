@@ -5,6 +5,7 @@
 - **Finding:** Batch parsing supports JSON array input (`json.load`) and now also supports line-by-line NDJSON processing.
 - **Impact:** Large JSON arrays still require full in-memory load; NDJSON path is streaming.
 - **Suggestion:** Prefer NDJSON for large runs; if JSON array streaming is needed, introduce an incremental parser.
+- **Status (2026-06-04):** NDJSON documented as the recommended large-batch format in `CLAUDE.md`. Incremental array parsing (`ijson`) intentionally deferred — not worth a new dependency for the current workload.
 
 ## 2) Duplicate raster work for PNG+ICO in `all` mode
 - **Location:** `app/generator/renderer.py:526-558`
@@ -35,3 +36,4 @@
 - **Finding:** SVG construction relies on many small strings and joins.
 - **Impact:** Moderate allocation overhead in SVG-heavy batches.
 - **Suggestion:** Future pass can optimize assembly by reducing split/join passes and building directly from append-only buffers.
+- **Status (2026-06-04):** Removed the per-icon cosmetic re-indent (split→rejoin) of the symbol group in `render_svg`; whitespace is non-semantic in SVG. Also fixed a correctness bug in `_svg_media` where stroke attributes were appended after a self-closed `<rect/>`, producing invalid XML and an unstroked media icon.

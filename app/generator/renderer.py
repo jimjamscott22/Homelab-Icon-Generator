@@ -470,8 +470,9 @@ def render_svg(
         style.fg_color,
         style.use_glow,
     )
-    # Indent the group block for readability
-    symbol_block = "\n".join(f"  {line}" for line in symbol_group.splitlines())
+    # Whitespace is cosmetic in SVG; emit the group as-is to avoid a
+    # per-icon split/rejoin pass.
+    symbol_block = symbol_group
 
     # Initials text
     text_parts: list[str] = []
@@ -569,8 +570,11 @@ def _svg_media(cx: int, cy: int, size: int, color: str) -> str:
         (cx - tw // 3, cy + th // 2),
     ]
     return "\n".join([
-        _svg_rect(cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2, fill="none") + " stroke=\"" + color + "\" stroke-width=\"" + str(int(size * 0.04)) + "\"",
-        _svg_polygon(points, fill=color)
+        _svg_rounded_rect(
+            cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2, 0,
+            fill="none", stroke=color, stroke_width=int(size * 0.04),
+        ),
+        _svg_polygon(points, fill=color),
     ])
 
 def _svg_ai(cx: int, cy: int, size: int, color: str) -> str:

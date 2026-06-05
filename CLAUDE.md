@@ -19,7 +19,9 @@ Batch mode:
 uv run python main.py --batch examples/sample_icons.json
 ```
 
-Output files land in `output/{format}/{category}/` with slugified filenames: `{slug}-{style}-{theme}-{size}.{ext}` — e.g. `output/png/cloud_service/nextcloud-minimal-blue-256.png`. Subdirectories are created lazily on first write.
+The batch file may be either a JSON array (`[{...}, {...}]`) or NDJSON (one JSON object per line). The JSON array path is loaded fully into memory via `json.load`; the NDJSON path is streamed line-by-line. **Prefer NDJSON for large batches** to keep memory flat — see `_iter_batch_entries` in `app/main.py`.
+
+Output files land in `output/{format}/{category}/` with slugified filenames: `{slug}-{style}-{theme}-{size}.{ext}` — e.g. `output/png/cloud_service/nextcloud-minimal-blue-256.png`. Output directories are created automatically on first write; the `.gitkeep` file keeps the `output/` directory in version control while generated files are ignored.
 
 ## Architecture
 
@@ -47,6 +49,18 @@ CLI args / JSON entry
 - **Style modules are stateless**: each `app/styles/<name>.py` exports only `get_style(palette) -> StyleDefinition`. Adding a new style is self-contained — no central registry to update beyond `VALID_STYLES`.
 
 - **Styles are loaded via importlib**: `renderer.py` uses `importlib.import_module(f"app.styles.{request.style}")` to avoid a hard import of every style module and to keep the style list as the single source of truth in `validation.py`.
+
+## Performance & Debugging
+
+### Memory Efficiency
+
+- **Batch processing**: NDJSON streaming keeps memory flat for large batches; JSON array path loads fully into memory
+- **Symbol rendering**: All coordinates are fractional (no per-size computation), so scaling up is cheap
+- For large batches (1000+ icons), prefer NDJSON input
+
+### Profiling & Analysis
+
+See [docs/PERFORMANCE_FINDINGS.md](docs/PERFORMANCE_FINDINGS.md) for detailed performance characteristics and optimization strategies discovered during recent profiling work.
 
 ## Extending the project
 
