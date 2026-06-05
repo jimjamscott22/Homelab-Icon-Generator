@@ -202,3 +202,4 @@ cython_debug/
 output/png/**
 output/svg/**
 !output/.gitkeep
+/output
