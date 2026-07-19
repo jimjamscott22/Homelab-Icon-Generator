@@ -83,8 +83,8 @@ See [docs/PERFORMANCE_FINDINGS.md](docs/PERFORMANCE_FINDINGS.md) for detailed pe
 ## Validation rules
 
 - `name`: required, non-empty
-- `category`: must be in `VALID_CATEGORIES` (12 values)
+- `category`: must be in `VALID_CATEGORIES` (24 values)
 - `style`: must be in `VALID_STYLES` (minimal, terminal, cyberpunk)
 - `theme`: must be in `VALID_THEMES` (green, blue, orange, purple, grayscale)
-- `format`: must be in `VALID_FORMATS` (png, svg, both)
-- `size`: integer between 32 and 2048 inclusive
+- `format`: must be in `VALID_FORMATS` (png, svg, ico, both, all)
+- `size`: integer between 32 and 2048 inclusive; ICO output additionally requires size <= 256

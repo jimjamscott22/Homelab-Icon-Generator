@@ -111,8 +111,8 @@ def generate():
     )
 
 
-_OUTPUT_FORMATS = frozenset({"png", "svg"})
-_OUTPUT_EXTS = frozenset({".png", ".svg"})
+_OUTPUT_FORMATS = frozenset({"png", "svg", "ico"})
+_OUTPUT_EXTS = frozenset({".png", ".svg", ".ico"})
 
 
 @app.route("/output/<fmt>/<category>/<filename>")
