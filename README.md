@@ -10,10 +10,10 @@ Icons are generated programmatically using geometric shapes and text — no exte
 
 ## Features
 
-- 16 device/service categories (server, router, Raspberry Pi, container, database, and more)
+- 24 device/service categories (server, router, Raspberry Pi, container, database, and more)
 - 3 visual styles: minimal, terminal, cyberpunk
 - 5 color themes: green, blue, orange, purple, grayscale
-- PNG, SVG, and ICO export
+- PNG, SVG, and ICO export (ICO is limited to sizes up to 256px)
 - Automatic initials from name (e.g. "Raspberry Pi Server" → RPS)
 - Optional transparent background
 - CLI and JSON batch mode
@@ -26,7 +26,7 @@ cd Homelab-Icon-Generator
 uv sync
 ```
 
-> Alternatively, install with pip: `pip install -r requirements.txt`
+> Alternatively, install with pip: `pip install -e .`
 
 ## Usage
 
@@ -63,6 +63,8 @@ raspberry_pi  server       router        switch
 laptop        desktop      phone         iot
 container     database     cloud_service generic_service
 media         ai           camera        game_console
+cli           code         git_branch    api
+firewall      vpn          nas           power
 ```
 
 ### Batch generation
@@ -146,11 +148,14 @@ homelab-icon-generator/
 │   ├── utils/
 │   │   ├── naming.py       # Initials generation
 │   │   └── validation.py   # Input validation
+│   ├── web/
+│   │   └── static/         # Web UI assets (HTML/CSS/JS)
 │   └── main.py             # CLI entry point
 ├── examples/
 │   └── sample_icons.json
 ├── output/                 # Generated icons land here
-├── requirements.txt
+├── server.py               # Flask web UI
+├── pyproject.toml          # Dependencies and packaging
 └── main.py                 # Root entry point (delegates to app/main.py)
 ```
 
@@ -172,6 +177,12 @@ homelab-icon-generator/
 
 1. Add a `ColorPalette` entry to `COLOR_THEMES` in `app/generator/colors.py`
 2. Add the name to `VALID_THEMES` in `app/utils/validation.py`
+
+## Roadmap
+
+See [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md) for the review findings and
+the ranked list of planned features, including what has already been completed
+and what remains.
 
 ## Tech stack
 

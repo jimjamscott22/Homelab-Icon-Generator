@@ -8,6 +8,7 @@ import re
 import importlib
 from functools import lru_cache
 from typing import TYPE_CHECKING
+from xml.sax.saxutils import escape as _xml_escape
 
 from PIL import Image, ImageDraw
 
@@ -482,7 +483,7 @@ def render_svg(
             f' font-family="monospace" font-size="{layout.font_size}"'
             f' fill="{style.text_color}"'
             f' text-anchor="middle" dominant-baseline="middle">'
-            f"{request.initials}</text>"
+            f"{_xml_escape(request.initials)}</text>"
         )
 
     sections = [
@@ -514,6 +515,10 @@ def generate_icon(request: "IconRequest") -> dict[str, str]:
     layout = _resolve_layout(request.size, style.font_scale)
 
     slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
+    if not slug:
+        # Names made entirely of punctuation or non-ASCII characters slugify to
+        # an empty string; fall back to the category so filenames stay valid.
+        slug = request.category
     base = f"{slug}-{request.style}-{request.theme}-{request.size}"
 
     def _path_for(ext: str) -> str:

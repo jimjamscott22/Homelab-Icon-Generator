@@ -21,6 +21,10 @@ VALID_FORMATS = {"png", "svg", "ico", "both", "all"}
 
 _MIN_SIZE = 32
 _MAX_SIZE = 2048
+# The ICO container format stores each image dimension in a single byte, so a
+# side length of 256 is encoded as 0 and anything larger cannot be represented.
+_MAX_ICO_SIZE = 256
+_ICO_FORMATS = {"ico", "all"}
 
 
 def validate_request(request: IconRequest) -> None:
@@ -54,4 +58,9 @@ def validate_request(request: IconRequest) -> None:
         raise ValueError(
             f"Size {request.size} is out of range. "
             f"Must be between {_MIN_SIZE} and {_MAX_SIZE} (inclusive)."
+        )
+    if request.format in _ICO_FORMATS and request.size > _MAX_ICO_SIZE:
+        raise ValueError(
+            f"Size {request.size} is too large for ICO output. "
+            f"The '{request.format}' format requires size <= {_MAX_ICO_SIZE}."
         )
