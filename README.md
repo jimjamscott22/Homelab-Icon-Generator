@@ -178,6 +178,12 @@ homelab-icon-generator/
 1. Add a `ColorPalette` entry to `COLOR_THEMES` in `app/generator/colors.py`
 2. Add the name to `VALID_THEMES` in `app/utils/validation.py`
 
+## Roadmap
+
+See [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md) for the review findings and
+the ranked list of planned features, including what has already been completed
+and what remains.
+
 ## Tech stack
 
 - Python 3.10+
