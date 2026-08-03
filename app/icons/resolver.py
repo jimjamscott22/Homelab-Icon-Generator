@@ -68,6 +68,19 @@ class IconResolver:
         """Return close manual choices without changing automatic selection."""
         return self._catalog.suggest(query, limit=limit)
 
+    def exact(self, query: str) -> VectorIcon | None:
+        """Return the exact automatic brand candidate, including controlled suffixes."""
+        icon = self._catalog.exact(query)
+        if icon is not None:
+            return icon
+        stripped = strip_deployment_suffix(query)
+        return self._catalog.exact(stripped) if stripped != normalize_icon_name(query) else None
+
+    @property
+    def diagnostics(self) -> tuple[object, ...]:
+        """Expose custom registry warnings and errors when the registry provides them."""
+        return tuple(getattr(self._catalog, "diagnostics", ()))
+
     @staticmethod
     def _matched(
         icon: VectorIcon, query: str, *, normalized: bool
