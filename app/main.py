@@ -20,6 +20,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--theme", type=str, default="blue", help="green / blue / orange / purple / grayscale")
     parser.add_argument("--size", type=int, default=256, help="Icon size in pixels")
     parser.add_argument("--format", type=str, default="both", help="png / svg / both")
+    parser.add_argument(
+        "--icon",
+        type=str,
+        default="auto",
+        help="auto / generic / stable icon key such as nextcloud",
+    )
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory")
     parser.add_argument("--transparent", action="store_true", default=False, help="Enable transparent background")
     parser.add_argument("--batch", type=str, default=None, help="Path to JSON batch file")
@@ -35,6 +41,7 @@ def run_single(args: argparse.Namespace) -> None:
         theme=args.theme,
         size=args.size,
         format=args.format,
+        icon=args.icon,
         transparent_bg=args.transparent,
         output_dir=args.output_dir,
     )
@@ -92,6 +99,7 @@ def run_batch(json_path: str, output_dir: str) -> None:
                 theme=entry.get("theme", "blue"),
                 size=entry.get("size", 256),
                 format=entry.get("format", "both"),
+                icon=entry.get("icon", "auto"),
                 transparent_bg=entry.get("transparent_bg", False),
                 output_dir=entry.get("output_dir", output_dir),
             )

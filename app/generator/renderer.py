@@ -107,7 +107,11 @@ def generate_icon_result(
 ) -> GenerationResult:
     """Generate requested formats and return paths with resolution metadata."""
     validate_request(request)
-    resolution = resolver.resolve(request) if resolver is not None else _generic_resolution(request)
+    if resolver is None:
+        from app.icons.resolver import get_default_resolver
+
+        resolver = get_default_resolver()
+    resolution = resolver.resolve(request)
     style = _resolve_style(request.style, request.theme)
     layout = _resolve_layout(request.size, style.font_scale)
     svg = render_svg(request, style, layout, resolution)
