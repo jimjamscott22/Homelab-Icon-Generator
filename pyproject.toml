@@ -5,8 +5,9 @@ description = "Procedural SVG/PNG icon generator for homelab services"
 requires-python = ">=3.10"
 dependencies = [
     "pillow>=10.1.0",
-    "svgwrite>=1.4.3",
     "flask>=3.0.0",
+    "resvg-py==0.3.3",
+    "defusedxml>=0.7.1,<0.8",
 ]
 
 [project.scripts]
