@@ -1,6 +1,6 @@
 # Hybrid Brand and Generic Icon System Design
 
-**Status:** Approved in collaborative design review on 2026-08-02
+**Status:** Implemented on `codex/hybrid-brand-icon-system` on 2026-08-02
 **Scope:** Icon selection, vector representation, rendering, catalog management,
 custom icons, web/CLI controls, and verification
 
