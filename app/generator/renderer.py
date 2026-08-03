@@ -1,47 +1,49 @@
-"""PNG and SVG renderer functions for the Homelab Icon Generator."""
+"""SVG-first output orchestration for the Homelab Icon Generator."""
 
 from __future__ import annotations
 
-import math
+import importlib
 import os
 import re
-import importlib
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING
-from xml.sax.saxutils import escape as _xml_escape
+from typing import Protocol
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from app.generator.colors import get_palette
-from app.generator.layouts import get_layout
-from app.generator.layouts import LayoutSpec
-from app.generator.shapes import draw_rounded_rect
-from app.generator.symbols import draw_symbol
-from app.generator.text_utils import render_initials
+from app.generator.layouts import LayoutSpec, get_layout
+from app.generator.rasterizer import rasterize_svg
+from app.generator.svg_composer import compose_svg
+from app.icons.generic import get_generic_icon
+from app.icons.models import IconResolution
+from app.models.icon_request import IconRequest
 from app.styles.base import StyleDefinition
 from app.utils.validation import validate_request
-
-if TYPE_CHECKING:
-    from app.models.icon_request import IconRequest
 
 _CREATED_OUTPUT_DIRS: set[str] = set()
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+class Resolver(Protocol):
+    """Minimal resolver interface accepted by the renderer."""
 
-def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Convert a hex color string (e.g. '#1a2b3c') to an (R, G, B) tuple."""
-    h = hex_color.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    def resolve(self, request: IconRequest) -> IconResolution:
+        """Resolve a request to vector artwork."""
+
+
+@dataclass(frozen=True)
+class GenerationResult:
+    """Generated file paths plus the identity decision used to render them."""
+
+    paths: dict[str, str]
+    resolution: IconResolution
 
 
 @lru_cache(maxsize=64)
 def _resolve_style(style_name: str, theme: str) -> StyleDefinition:
     palette = get_palette(theme)
-    style_mod = importlib.import_module(f"app.styles.{style_name}")
-    return style_mod.get_style(palette)
+    style_module = importlib.import_module(f"app.styles.{style_name}")
+    return style_module.get_style(palette)
 
 
 @lru_cache(maxsize=64)
@@ -49,746 +51,107 @@ def _resolve_layout(size: int, font_scale: float) -> LayoutSpec:
     return get_layout(size, font_scale)
 
 
-# ---------------------------------------------------------------------------
-# PNG renderer
-# ---------------------------------------------------------------------------
-
-def render_png(
-    request: "IconRequest",
-    style: StyleDefinition,
-    layout: LayoutSpec,
-) -> Image.Image:
-    """Render an icon as a PIL Image (RGBA mode).
-
-    Glow is intentionally skipped for PNG; use SVG if glow is desired.
-    """
-    size = request.size
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # Background
-    if not request.transparent_bg:
-        r, g, b = _hex_to_rgb(style.bg_color)
-        draw.rounded_rectangle(
-            [(0, 0), (size - 1, size - 1)],
-            radius=style.corner_radius,
-            fill=(r, g, b, 255),
-        )
-
-    # Border
-    if style.border_width > 0:
-        inset = style.border_width // 2
-        draw_rounded_rect(
-            draw,
-            [(inset, inset), (size - 1 - inset, size - 1 - inset)],
-            radius=style.corner_radius,
-            fill=None,
-            outline=style.accent_color,
-            width=style.border_width,
-        )
-
-    # Symbol
-    symbol_draw_size = (
-        int(layout.symbol_size * 0.55)
-        if layout.show_initials
-        else int(layout.symbol_size * 0.65)
+def _generic_resolution(request: IconRequest) -> IconResolution:
+    return IconResolution(
+        icon=get_generic_icon(request.category),
+        match_method="generic",
+        query=request.name,
+        used_fallback=True,
     )
-    draw_symbol(
-        request.category,
-        draw,
-        layout.symbol_cx,
-        layout.symbol_cy,
-        symbol_draw_size,
-        style.fg_color,
-    )
-
-    # Initials
-    if layout.show_initials:
-        render_initials(
-            draw,
-            request.initials,
-            layout.initials_cx,
-            layout.initials_cy,
-            layout.font_size,
-            style.text_color,
-        )
-
-    return img
-
-
-# ---------------------------------------------------------------------------
-# SVG symbol helpers
-# ---------------------------------------------------------------------------
-
-def _svg_rounded_rect(
-    x1: int, y1: int, x2: int, y2: int,
-    radius: int,
-    fill: str = "none",
-    stroke: str = "none",
-    stroke_width: int = 0,
-) -> str:
-    """Return an SVG <rect> element with rounded corners."""
-    w = x2 - x1
-    h = y2 - y1
-    parts = [
-        f'<rect x="{x1}" y="{y1}" width="{w}" height="{h}" rx="{radius}"',
-        f' fill="{fill}"',
-    ]
-    if stroke != "none" and stroke_width > 0:
-        parts.append(f' stroke="{stroke}" stroke-width="{stroke_width}"')
-    parts.append("/>")
-    return "".join(parts)
-
-
-def _svg_circle(cx: int, cy: int, r: int, fill: str) -> str:
-    return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{fill}"/>'
-
-
-def _svg_ellipse(cx: int, cy: int, rx: int, ry: int, fill: str) -> str:
-    return f'<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="{fill}"/>'
-
-
-def _svg_line(x1: int, y1: int, x2: int, y2: int, stroke: str, width: int) -> str:
-    return (
-        f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"'
-        f' stroke="{stroke}" stroke-width="{width}"/>'
-    )
-
-
-def _svg_polygon(points: list[tuple[int, int]], fill: str) -> str:
-    pts = " ".join(f"{x},{y}" for x, y in points)
-    return f'<polygon points="{pts}" fill="{fill}"/>'
-
-
-def _svg_rect(x1: int, y1: int, x2: int, y2: int, fill: str) -> str:
-    """Plain rectangle (no rounding)."""
-    w = x2 - x1
-    h = y2 - y1
-    return f'<rect x="{x1}" y="{y1}" width="{w}" height="{h}" fill="{fill}"/>'
-
-
-# ---------------------------------------------------------------------------
-# Per-category SVG symbol functions
-# Each mirrors the corresponding draw_* function in symbols.py.
-# ---------------------------------------------------------------------------
-
-def _svg_raspberry_pi(cx: int, cy: int, size: int, color: str) -> str:
-    r = int(size * 0.28)
-    radius = int(size * 0.06)
-    elements = [
-        _svg_rounded_rect(cx - r, cy - r, cx + r, cy + r, radius, fill=color)
-    ]
-    pin_r = int(size * 0.04)
-    offset = int(size * 0.22)
-    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-        elements.append(
-            _svg_circle(cx + dx * offset, cy + dy * offset, pin_r, color)
-        )
-    return "\n".join(elements)
-
-
-def _svg_server(cx: int, cy: int, size: int, color: str) -> str:
-    bar_h = int(size * 0.10)
-    bar_w = int(size * 0.55)
-    gap = int(size * 0.04)
-    total = 3 * bar_h + 2 * gap
-    top = cy - total // 2
-    elements = []
-    for i in range(3):
-        y = top + i * (bar_h + gap)
-        radius = max(2, int(size * 0.01))
-        elements.append(
-            _svg_rounded_rect(
-                cx - bar_w // 2, y, cx + bar_w // 2, y + bar_h,
-                radius, fill=color,
-            )
-        )
-    return "\n".join(elements)
-
-
-def _svg_router(cx: int, cy: int, size: int, color: str) -> str:
-    bw = int(size * 0.50)
-    bh = int(size * 0.18)
-    radius = max(2, int(size * 0.02))
-    elements = [
-        _svg_rounded_rect(
-            cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2,
-            radius, fill=color,
-        )
-    ]
-    ant_h = int(size * 0.20)
-    ant_w = max(2, int(size * 0.04))
-    for dx in [-int(size * 0.15), 0, int(size * 0.15)]:
-        x = cx + dx
-        elements.append(
-            _svg_rect(
-                x - ant_w // 2,
-                cy - bh // 2 - ant_h,
-                x + ant_w // 2,
-                cy - bh // 2,
-                color,
-            )
-        )
-    return "\n".join(elements)
-
-
-def _svg_switch(cx: int, cy: int, size: int, color: str) -> str:
-    pw = int(size * 0.12)
-    ph = int(size * 0.12)
-    gap = int(size * 0.04)
-    cols, rows = 3, 2
-    total_w = cols * pw + (cols - 1) * gap
-    total_h = rows * ph + (rows - 1) * gap
-    ox = cx - total_w // 2
-    oy = cy - total_h // 2
-    radius = max(2, int(size * 0.01))
-    elements = []
-    for row in range(rows):
-        for col in range(cols):
-            x = ox + col * (pw + gap)
-            y = oy + row * (ph + gap)
-            elements.append(
-                _svg_rounded_rect(x, y, x + pw, y + ph, radius, fill=color)
-            )
-    return "\n".join(elements)
-
-
-def _svg_laptop(cx: int, cy: int, size: int, color: str) -> str:
-    sw = int(size * 0.50)
-    sh = int(size * 0.32)
-    screen_top = cy - sh // 2 - int(size * 0.04)
-    radius = max(2, int(size * 0.02))
-    elements = [
-        _svg_rounded_rect(
-            cx - sw // 2, screen_top, cx + sw // 2, screen_top + sh,
-            radius, fill=color,
-        )
-    ]
-    bw = int(size * 0.58)
-    bh = int(size * 0.06)
-    base_y = screen_top + sh + int(size * 0.02)
-    elements.append(
-        _svg_rounded_rect(
-            cx - bw // 2, base_y, cx + bw // 2, base_y + bh,
-            max(2, int(size * 0.01)), fill=color,
-        )
-    )
-    return "\n".join(elements)
-
-
-def _svg_desktop(cx: int, cy: int, size: int, color: str) -> str:
-    tw = int(size * 0.28)
-    th = int(size * 0.48)
-    radius = max(2, int(size * 0.02))
-    elements = [
-        _svg_rounded_rect(
-            cx - tw // 2, cy - th // 2, cx + tw // 2, cy + th // 2,
-            radius, fill=color,
-        )
-    ]
-    bw = int(size * 0.36)
-    bh = int(size * 0.05)
-    base_y = cy + th // 2
-    elements.append(
-        _svg_rounded_rect(
-            cx - bw // 2, base_y, cx + bw // 2, base_y + bh,
-            max(2, int(size * 0.01)), fill=color,
-        )
-    )
-    return "\n".join(elements)
-
-
-def _svg_phone(cx: int, cy: int, size: int, color: str) -> str:
-    w = int(size * 0.28)
-    h = int(size * 0.50)
-    radius = int(size * 0.06)
-    return _svg_rounded_rect(
-        cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2,
-        radius, fill=color,
-    )
-
-
-def _svg_iot(cx: int, cy: int, size: int, color: str) -> str:
-    parts = []
-    stroke_w = max(2, int(size * 0.025))
-    for r in [int(size * 0.28), int(size * 0.20), int(size * 0.12)]:
-        parts.append(
-            f'<path d="M {cx-r},{cy} A {r},{r} 0 0,1 {cx+r},{cy}" '
-            f'stroke="{color}" stroke-width="{stroke_w}" fill="none"/>'
-        )
-    dot_r = int(size * 0.04)
-    parts.append(f'<circle cx="{cx}" cy="{cy}" r="{dot_r}" fill="{color}"/>')
-    return "\n".join(parts)
-
-
-def _svg_container(cx: int, cy: int, size: int, color: str) -> str:
-    s = int(size * 0.48)
-    lw = max(2, int(size * 0.025))
-    radius = max(2, int(size * 0.02))
-    half = s // 2
-    elements = [
-        _svg_rounded_rect(
-            cx - half, cy - half, cx + half, cy + half,
-            radius,
-            fill="none",
-            stroke=color,
-            stroke_width=lw,
-        ),
-        # Vertical divider
-        _svg_line(cx, cy - half + lw, cx, cy + half - lw, color, lw),
-        # Horizontal divider
-        _svg_line(cx - half + lw, cy, cx + half - lw, cy, color, lw),
-    ]
-    return "\n".join(elements)
-
-
-def _svg_database(cx: int, cy: int, size: int, color: str) -> str:
-    ew = int(size * 0.42)
-    eh = int(size * 0.12)
-    body_h = int(size * 0.30)
-    top_y = cy - body_h // 2
-    half_ew = ew // 2
-    half_eh = eh // 2
-
-    body_top = top_y + half_eh
-    body_bottom = body_top + body_h
-
-    elements = [
-        # Rectangular body
-        _svg_rect(cx - half_ew, body_top, cx + half_ew, body_bottom, color),
-        # Bottom ellipse cap
-        _svg_ellipse(
-            cx, body_bottom,
-            half_ew, half_eh,
-            color,
-        ),
-        # Top ellipse cap (drawn on top)
-        _svg_ellipse(
-            cx, top_y + half_eh,
-            half_ew, half_eh,
-            color,
-        ),
-    ]
-    return "\n".join(elements)
-
-
-def _svg_cloud_service(cx: int, cy: int, size: int, color: str) -> str:
-    r = int(size * 0.14)
-    base_cy = cy + int(size * 0.04)
-    elements = []
-    for dx in [-int(size * 0.14), 0, int(size * 0.14)]:
-        elements.append(_svg_circle(cx + dx, base_cy, r, color))
-    # Top puff
-    elements.append(
-        _svg_circle(cx, base_cy - int(size * 0.10), int(size * 0.11), color)
-    )
-    return "\n".join(elements)
-
-
-def _svg_generic_service(cx: int, cy: int, size: int, color: str) -> str:
-    r = int(size * 0.28)
-    points = [
-        (
-            int(cx + r * math.cos(math.radians(60 * i - 30))),
-            int(cy + r * math.sin(math.radians(60 * i - 30))),
-        )
-        for i in range(6)
-    ]
-    return _svg_polygon(points, color)
-
-
-
-
-def _category_svg(
-    category: str,
-    cx: int,
-    cy: int,
-    size: int,
-    color: str,
-    use_glow: bool,
-) -> str:
-    """Return an SVG group string for the given category symbol."""
-    fn = _SVG_SYMBOL_FUNCS.get(category, _svg_generic_service)
-    inner = fn(cx, cy, size, color)
-    if use_glow:
-        return f'<g filter="url(#glow)">\n{inner}\n</g>'
-    return f"<g>\n{inner}\n</g>"
-
-
-# ---------------------------------------------------------------------------
-# SVG renderer
-# ---------------------------------------------------------------------------
-
-_GLOW_FILTER = """\
-  <filter id="glow">
-    <feGaussianBlur stdDeviation="3" result="blur"/>
-    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>"""
 
 
 def render_svg(
-    request: "IconRequest",
+    request: IconRequest,
     style: StyleDefinition,
     layout: LayoutSpec,
+    resolution: IconResolution | None = None,
 ) -> str:
-    """Render an icon as an SVG string."""
-    size = request.size
-
-    # Defs section
-    defs_content = _GLOW_FILTER if style.use_glow else ""
-    defs_block = f"  <defs>\n{defs_content}\n  </defs>" if defs_content else "  <defs/>"
-
-    # Background
-    bg_fill = "none" if request.transparent_bg else style.bg_color
-    bg_rect = (
-        f'  <rect width="{size}" height="{size}"'
-        f' rx="{style.corner_radius}" fill="{bg_fill}"/>'
+    """Render a request as the authoritative SVG string."""
+    return compose_svg(
+        request,
+        style,
+        layout,
+        resolution or _generic_resolution(request),
     )
 
-    # Border
-    border_parts: list[str] = []
-    if style.border_width > 0:
-        inset = style.border_width // 2
-        bw = size - 2 * inset
-        border_parts.append(
-            f'  <rect x="{inset}" y="{inset}" width="{bw}" height="{bw}"'
-            f' rx="{style.corner_radius}"'
-            f' stroke="{style.accent_color}" stroke-width="{style.border_width}"'
-            f' fill="none"/>'
-        )
 
-    # Symbol
-    symbol_draw_size = (
-        int(layout.symbol_size * 0.55)
-        if layout.show_initials
-        else int(layout.symbol_size * 0.65)
-    )
-    symbol_group = _category_svg(
-        request.category,
-        layout.symbol_cx,
-        layout.symbol_cy,
-        symbol_draw_size,
-        style.fg_color,
-        style.use_glow,
-    )
-    # Whitespace is cosmetic in SVG; emit the group as-is to avoid a
-    # per-icon split/rejoin pass.
-    symbol_block = symbol_group
-
-    # Initials text
-    text_parts: list[str] = []
-    if layout.show_initials:
-        text_parts.append(
-            f'  <text x="{layout.initials_cx}" y="{layout.initials_cy}"'
-            f' font-family="monospace" font-size="{layout.font_size}"'
-            f' fill="{style.text_color}"'
-            f' text-anchor="middle" dominant-baseline="middle">'
-            f"{_xml_escape(request.initials)}</text>"
-        )
-
-    sections = [
-        f'<svg xmlns="http://www.w3.org/2000/svg"'
-        f' width="{size}" height="{size}" viewBox="0 0 {size} {size}">',
-        defs_block,
-        bg_rect,
-        *border_parts,
-        symbol_block,
-        *text_parts,
-        "</svg>",
-    ]
-    return "\n".join(sections)
+def render_png(
+    request: IconRequest,
+    style: StyleDefinition,
+    layout: LayoutSpec,
+    resolution: IconResolution | None = None,
+) -> Image.Image:
+    """Rasterize the authoritative SVG into an RGBA image."""
+    svg = render_svg(request, style, layout, resolution)
+    return rasterize_svg(svg, request.size, request.size)
 
 
-# ---------------------------------------------------------------------------
-# Orchestrator
-# ---------------------------------------------------------------------------
+def _output_path(request: IconRequest, base: str, extension: str) -> str:
+    destination = os.path.join(request.output_dir, extension, request.category)
+    if destination not in _CREATED_OUTPUT_DIRS:
+        os.makedirs(destination, exist_ok=True)
+        _CREATED_OUTPUT_DIRS.add(destination)
+    return os.path.join(destination, f"{base}.{extension}")
 
-def generate_icon(request: "IconRequest") -> dict[str, str]:
-    """Run the full icon generation pipeline and return a dict of output paths.
 
-    The returned dict contains keys "png" and/or "svg" depending on the
-    requested format, mapping to the absolute file paths of the saved files.
-    """
-    validate_request(request)
-
-    style = _resolve_style(request.style, request.theme)
-    layout = _resolve_layout(request.size, style.font_scale)
-
+def _output_base(request: IconRequest) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
     if not slug:
-        # Names made entirely of punctuation or non-ASCII characters slugify to
-        # an empty string; fall back to the category so filenames stay valid.
         slug = request.category
-    base = f"{slug}-{request.style}-{request.theme}-{request.size}"
+    return f"{slug}-{request.style}-{request.theme}-{request.size}"
 
-    def _path_for(ext: str) -> str:
-        dest_dir = os.path.join(request.output_dir, ext, request.category)
-        if dest_dir not in _CREATED_OUTPUT_DIRS:
-            os.makedirs(dest_dir, exist_ok=True)
-            _CREATED_OUTPUT_DIRS.add(dest_dir)
-        return os.path.join(dest_dir, f"{base}.{ext}")
 
-    output: dict[str, str] = {}
-    needs_png = request.format in ("png", "both", "all")
-    needs_ico = request.format in ("ico", "all")
-    base_img: Image.Image | None = None
-    base_img_rgb: Image.Image | None = None
-    if needs_png or needs_ico:
-        base_img = render_png(request, style, layout)
-        if not request.transparent_bg:
-            base_img_rgb = base_img.convert("RGB")
+def generate_icon_result(
+    request: IconRequest,
+    resolver: Resolver | None = None,
+) -> GenerationResult:
+    """Generate requested formats and return paths with resolution metadata."""
+    validate_request(request)
+    if resolver is None:
+        from app.icons.resolver import get_default_resolver
 
-    if needs_png and base_img is not None:
-        png_path = _path_for("png")
-        if request.transparent_bg:
-            base_img.save(png_path, format="PNG")
-        else:
-            png_img = base_img_rgb if base_img_rgb is not None else base_img.convert("RGB")
-            png_img.save(png_path, format="PNG")
-        output["png"] = png_path
+        resolver = get_default_resolver()
+    resolution = resolver.resolve(request)
+    style = _resolve_style(request.style, request.theme)
+    layout = _resolve_layout(request.size, style.font_scale)
+    svg = render_svg(request, style, layout, resolution)
+    base = _output_base(request)
+    paths: dict[str, str] = {}
 
     if request.format in ("svg", "both", "all"):
-        svg_str = render_svg(request, style, layout)
-        svg_path = _path_for("svg")
-        with open(svg_path, "w", encoding="utf-8") as fh:
-            fh.write(svg_str)
-        output["svg"] = svg_path
+        svg_path = _output_path(request, base, "svg")
+        with open(svg_path, "w", encoding="utf-8") as output_file:
+            output_file.write(svg)
+        paths["svg"] = svg_path
 
-    if needs_ico and base_img is not None:
-        ico_path = _path_for("ico")
-        if request.transparent_bg:
-            base_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
-        else:
-            ico_img = base_img_rgb if base_img_rgb is not None else base_img.convert("RGB")
-            ico_img.save(ico_path, format="ICO", sizes=[(request.size, request.size)])
-        output["ico"] = ico_path
+    needs_png = request.format in ("png", "both", "all")
+    needs_ico = request.format in ("ico", "all")
+    raster: Image.Image | None = None
+    if needs_png or needs_ico:
+        raster = rasterize_svg(svg, request.size, request.size)
 
-    return output
-def _svg_media(cx: int, cy: int, size: int, color: str) -> str:
-    bw = int(size * 0.45)
-    bh = int(size * 0.35)
-    tw = int(size * 0.15)
-    th = int(size * 0.15)
-    points = [
-        (cx - tw // 3, cy - th // 2),
-        (cx + tw * 2 // 3, cy),
-        (cx - tw // 3, cy + th // 2),
-    ]
-    return "\n".join([
-        _svg_rounded_rect(
-            cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2, 0,
-            fill="none", stroke=color, stroke_width=int(size * 0.04),
-        ),
-        _svg_polygon(points, fill=color),
-    ])
+    if needs_png and raster is not None:
+        png_path = _output_path(request, base, "png")
+        png_image = raster if request.transparent_bg else raster.convert("RGB")
+        png_image.save(png_path, format="PNG")
+        paths["png"] = png_path
 
-def _svg_ai(cx: int, cy: int, size: int, color: str) -> str:
-    w = int(size * 0.40)
-    h = int(size * 0.35)
-    elements = [
-        _svg_rounded_rect(cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2, max(2, int(size * 0.05)), fill="none", stroke=color, stroke_width=int(size * 0.04)),
-        _svg_rect(cx - w // 4 - int(size * 0.04), cy - h // 4, cx - w // 4 + int(size * 0.04), cy - h // 4 + int(size * 0.08), fill=color),
-        _svg_rect(cx + w // 4 - int(size * 0.04), cy - h // 4, cx + w // 4 + int(size * 0.04), cy - h // 4 + int(size * 0.08), fill=color),
-        _svg_line(cx - w // 4, cy + h // 4, cx + w // 4, cy + h // 4, stroke=color, width=max(2, int(size * 0.02)))
-    ]
-    return "\n".join(elements)
+    if needs_ico and raster is not None:
+        ico_path = _output_path(request, base, "ico")
+        ico_image = raster if request.transparent_bg else raster.convert("RGB")
+        ico_image.save(
+            ico_path,
+            format="ICO",
+            sizes=[(request.size, request.size)],
+        )
+        paths["ico"] = ico_path
 
-def _svg_camera(cx: int, cy: int, size: int, color: str) -> str:
-    bw = int(size * 0.46)
-    bh = int(size * 0.30)
-    elements = [
-        _svg_rounded_rect(cx - bw // 2, cy - bh // 2, cx + bw // 2, cy + bh // 2, max(2, int(size * 0.04)), fill="none", stroke=color, stroke_width=int(size * 0.04)),
-        _svg_circle(cx, cy, int(size * 0.10), fill=color),
-        _svg_rect(cx - int(size * 0.05), cy - bh // 2 - int(size * 0.06), cx + int(size * 0.05), cy - bh // 2, fill=color)
-    ]
-    return "\n".join(elements)
-
-def _svg_game_console(cx: int, cy: int, size: int, color: str) -> str:
-    w = int(size * 0.55)
-    h = int(size * 0.35)
-    elements = [
-        _svg_rounded_rect(cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2, int(size * 0.1), fill=color),
-        _svg_line(cx - w // 3, cy - int(size * 0.06), cx - w // 3, cy + int(size * 0.06), stroke="white", width=int(size * 0.02)),
-        _svg_circle(cx + w // 4, cy - int(size * 0.04), int(size * 0.02), fill="white")
-    ]
-    return "\n".join(elements)
-
-def _svg_cli(cx: int, cy: int, size: int, color: str) -> str:
-    lw = max(2, int(size * 0.04))
-    parts = [
-        _svg_line(cx - int(size * 0.22), cy - int(size * 0.16),
-                  cx - int(size * 0.06), cy, color, lw),
-        _svg_line(cx - int(size * 0.06), cy,
-                  cx - int(size * 0.22), cy + int(size * 0.16), color, lw),
-        _svg_rect(cx + int(size * 0.04), cy - int(size * 0.06),
-                  cx + int(size * 0.22), cy + int(size * 0.06), color),
-    ]
-    return "\n".join(parts)
+    return GenerationResult(paths=paths, resolution=resolution)
 
 
-def _svg_code(cx: int, cy: int, size: int, color: str) -> str:
-    lw = max(2, int(size * 0.04))
-    parts = [
-        _svg_line(cx - int(size * 0.10), cy - int(size * 0.18),
-                  cx - int(size * 0.26), cy, color, lw),
-        _svg_line(cx - int(size * 0.26), cy,
-                  cx - int(size * 0.10), cy + int(size * 0.18), color, lw),
-        _svg_line(cx + int(size * 0.10), cy - int(size * 0.18),
-                  cx + int(size * 0.26), cy, color, lw),
-        _svg_line(cx + int(size * 0.26), cy,
-                  cx + int(size * 0.10), cy + int(size * 0.18), color, lw),
-        _svg_line(cx - int(size * 0.07), cy + int(size * 0.20),
-                  cx + int(size * 0.07), cy - int(size * 0.20), color, lw),
-    ]
-    return "\n".join(parts)
-
-
-def _svg_git_branch(cx: int, cy: int, size: int, color: str) -> str:
-    lw = max(2, int(size * 0.03))
-    node_r = int(size * 0.06)
-    trunk_x = cx - int(size * 0.12)
-    top = (trunk_x, cy - int(size * 0.22))
-    bot = (trunk_x, cy + int(size * 0.22))
-    branch = (cx + int(size * 0.20), cy)
-    parts = [
-        _svg_line(top[0], top[1], bot[0], bot[1], color, lw),
-        _svg_line(trunk_x, cy, branch[0], branch[1], color, lw),
-        _svg_circle(top[0], top[1], node_r, color),
-        _svg_circle(bot[0], bot[1], node_r, color),
-        _svg_circle(branch[0], branch[1], node_r, color),
-    ]
-    return "\n".join(parts)
-
-
-def _svg_api(cx: int, cy: int, size: int, color: str) -> str:
-    outer_r = int(size * 0.28)
-    inner_r = int(size * 0.18)
-    hole_r = int(size * 0.08)
-    lw = max(2, int(size * 0.025))
-    tw = int(size * 0.08)
-    th = int(size * 0.10)
-    parts = []
-    for i in range(8):
-        ang = math.radians(i * 45)
-        tx = cx + int((outer_r - th // 2) * math.cos(ang))
-        ty = cy + int((outer_r - th // 2) * math.sin(ang))
-        parts.append(_svg_rect(tx - tw // 2, ty - th // 2,
-                               tx + tw // 2, ty + th // 2, color))
-    parts.append(
-        f'<circle cx="{cx}" cy="{cy}" r="{inner_r}" fill="none"'
-        f' stroke="{color}" stroke-width="{lw}"/>'
-    )
-    parts.append(_svg_circle(cx, cy, hole_r, color))
-    return "\n".join(parts)
-
-
-def _svg_firewall(cx: int, cy: int, size: int, color: str) -> str:
-    lw = max(2, int(size * 0.02))
-    bw = int(size * 0.18)
-    bh = int(size * 0.12)
-    total_w = bw * 3
-    left = cx - total_w // 2
-    top = cy - int(bh * 1.5)
-    parts = [
-        f'<rect x="{left}" y="{top}" width="{total_w}" height="{bh * 3}"'
-        f' fill="none" stroke="{color}" stroke-width="{lw}"/>'
-    ]
-    # row 1 dividers
-    for i in range(1, 3):
-        x = left + i * bw
-        parts.append(_svg_line(x, top, x, top + bh, color, lw))
-    # row 2
-    y2 = top + bh
-    parts.append(_svg_line(left, y2, left + total_w, y2, color, lw))
-    for i in (1, 2):
-        x = left + bw // 2 + (i - 1) * bw
-        parts.append(_svg_line(x, y2, x, y2 + bh, color, lw))
-    x_last = left + bw // 2 + bw
-    parts.append(_svg_line(x_last, y2, x_last, y2 + bh, color, lw))
-    # row 3
-    y3 = top + 2 * bh
-    parts.append(_svg_line(left, y3, left + total_w, y3, color, lw))
-    for i in range(1, 3):
-        x = left + i * bw
-        parts.append(_svg_line(x, y3, x, y3 + bh, color, lw))
-    return "\n".join(parts)
-
-
-def _svg_vpn(cx: int, cy: int, size: int, color: str) -> str:
-    points = [
-        (cx, cy - int(size * 0.28)),
-        (cx + int(size * 0.24), cy - int(size * 0.16)),
-        (cx + int(size * 0.20), cy + int(size * 0.18)),
-        (cx, cy + int(size * 0.30)),
-        (cx - int(size * 0.20), cy + int(size * 0.18)),
-        (cx - int(size * 0.24), cy - int(size * 0.16)),
-    ]
-    return _svg_polygon(points, color)
-
-
-def _svg_nas(cx: int, cy: int, size: int, color: str) -> str:
-    bw = int(size * 0.55)
-    bh = int(size * 0.12)
-    gap = int(size * 0.04)
-    total_h = 3 * bh + 2 * gap
-    top = cy - total_h // 2
-    radius = max(2, int(size * 0.02))
-    dot_r = int(size * 0.025)
-    lw = max(2, int(size * 0.02))
-    parts = []
-    for i in range(3):
-        y = top + i * (bh + gap)
-        parts.append(_svg_rounded_rect(
-            cx - bw // 2, y, cx + bw // 2, y + bh, radius,
-            fill="none", stroke=color, stroke_width=lw,
-        ))
-        parts.append(_svg_circle(
-            cx + bw // 2 - int(size * 0.06), y + bh // 2, dot_r, color,
-        ))
-    return "\n".join(parts)
-
-
-def _svg_power(cx: int, cy: int, size: int, color: str) -> str:
-    r = int(size * 0.26)
-    lw = max(2, int(size * 0.05))
-    # arc from 300° to 240° going clockwise (the long way around the bottom)
-    sx = cx + int(r * math.cos(math.radians(300)))
-    sy = cy + int(r * math.sin(math.radians(300)))
-    ex = cx + int(r * math.cos(math.radians(240)))
-    ey = cy + int(r * math.sin(math.radians(240)))
-    parts = [
-        f'<path d="M {sx} {sy} A {r} {r} 0 1 1 {ex} {ey}"'
-        f' fill="none" stroke="{color}" stroke-width="{lw}"'
-        f' stroke-linecap="round"/>',
-        _svg_line(cx, cy - r - int(size * 0.04),
-                  cx, cy - int(size * 0.02), color, lw),
-    ]
-    return "\n".join(parts)
-
-
-_SVG_SYMBOL_FUNCS = {
-    "raspberry_pi": _svg_raspberry_pi,
-    "server": _svg_server,
-    "router": _svg_router,
-    "switch": _svg_switch,
-    "laptop": _svg_laptop,
-    "desktop": _svg_desktop,
-    "phone": _svg_phone,
-    "iot": _svg_iot,
-    "container": _svg_container,
-    "database": _svg_database,
-    "cloud_service": _svg_cloud_service,
-    "generic_service": _svg_generic_service,
-    "media": _svg_media,
-    "ai": _svg_ai,
-    "camera": _svg_camera,
-    "game_console": _svg_game_console,
-    "cli": _svg_cli,
-    "code": _svg_code,
-    "git_branch": _svg_git_branch,
-    "api": _svg_api,
-    "firewall": _svg_firewall,
-    "vpn": _svg_vpn,
-    "nas": _svg_nas,
-    "power": _svg_power,
-}
+def generate_icon(
+    request: IconRequest,
+    resolver: Resolver | None = None,
+) -> dict[str, str]:
+    """Backward-compatible paths-only generation API."""
+    return generate_icon_result(request, resolver=resolver).paths

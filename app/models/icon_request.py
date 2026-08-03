@@ -20,6 +20,7 @@ class IconRequest:
     theme: str = "blue"
     size: int = 256
     format: str = "both"          # "png" | "svg" | "both"
+    icon: str = "auto"            # "auto" | "generic" | stable icon key
     transparent_bg: bool = False
     output_dir: str = "output"
 

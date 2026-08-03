@@ -1,11 +1,7 @@
-const CATEGORIES = [
-  "raspberry_pi","server","router","switch","laptop","desktop",
-  "phone","iot","container","database","cloud_service","generic_service",
-  "media","ai","camera","game_console"
-];
-const STYLES  = ["minimal","terminal","cyberpunk"];
-const THEMES  = ["green","blue","orange","purple","grayscale"];
-const FORMATS = ["png","svg","both"];
+let CATEGORIES = [];
+let STYLES = [];
+let THEMES = [];
+let FORMATS = [];
 
 const state = {
   name: "NEXTCLOUD",
@@ -15,12 +11,20 @@ const state = {
   format: "both",
   size: 256,
   transparent: false,
+  icon: "auto",
+  iconTitle: null,
+  iconSource: null,
   recent: [],
   builds: 0,
 };
 let _cliText = "";
+let iconSearchTimer = null;
 
 const $  = (id) => document.getElementById(id);
+const escapeHtml = (value) => String(value).replace(
+  /[&<>"']/g,
+  (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character],
+);
 const el = (tag, props = {}, ...kids) => {
   const n = document.createElement(tag);
   Object.entries(props).forEach(([k, v]) => {
@@ -57,6 +61,8 @@ function setCategory(v) {
   document.querySelectorAll("#categories .chip").forEach((c) =>
     c.setAttribute("aria-pressed", c.dataset.value === v ? "true" : "false")
   );
+  if (state.icon === "auto") detectIcon(state.name);
+  if (state.icon === "generic") setIcon("generic");
   syncCli();
 }
 
@@ -144,10 +150,104 @@ sizeInput.addEventListener("input", () => {
   syncCli();
 });
 
+/* ============ ICON DETECTION / OVERRIDE ============ */
+function updateIconButtons() {
+  document.querySelectorAll("[data-icon-key]").forEach((button) => {
+    button.setAttribute("aria-pressed", button.dataset.iconKey === state.icon ? "true" : "false");
+  });
+}
+
+function setIcon(key, title = null, source = null) {
+  state.icon = key;
+  state.iconTitle = title;
+  state.iconSource = source;
+  updateIconButtons();
+  if (key === "auto") {
+    detectIcon(state.name);
+  } else if (key === "generic") {
+    $("iconDetection").className = "icon-detection fallback";
+    $("iconDetection").querySelector("span:last-child").textContent =
+      `GENERIC // ${state.category.replace(/_/g, " ").toUpperCase()}`;
+  } else {
+    $("iconDetection").className = "icon-detection override";
+    $("iconDetection").querySelector("span:last-child").textContent =
+      `OVERRIDE // ${(title || key).toUpperCase()} · ${(source || "custom").toUpperCase()}`;
+  }
+  syncCli();
+}
+
+function renderIconSuggestions(items) {
+  const host = $("iconSuggestions");
+  host.innerHTML = "";
+  items.slice(0, 6).forEach((item) => {
+    const button = el("button", {
+      type: "button",
+      class: "icon-option",
+      "data-icon-key": item.key,
+      "aria-pressed": item.key === state.icon ? "true" : "false",
+      onclick: () => setIcon(item.key, item.title, item.source),
+    });
+    button.append(
+      el("span", { class: "icon-option-title" }, item.title),
+      el("span", { class: "icon-option-source" }, item.source),
+    );
+    host.append(button);
+  });
+}
+
+async function detectIcon(query) {
+  const value = (query || "").trim();
+  if (!value) {
+    renderIconSuggestions([]);
+    return;
+  }
+  try {
+    const response = await fetch(`/api/icons/search?q=${encodeURIComponent(value)}&limit=6`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "catalog search failed");
+    renderIconSuggestions(data.items || []);
+    if (state.icon !== "auto") {
+      updateIconButtons();
+      return;
+    }
+    const readout = $("iconDetection");
+    if (data.exact) {
+      state.iconTitle = data.exact.title;
+      state.iconSource = data.exact.source;
+      readout.className = "icon-detection detected";
+      readout.querySelector("span:last-child").textContent =
+        `DETECTED // ${data.exact.title.toUpperCase()} · ${data.exact.source.toUpperCase()}`;
+    } else {
+      state.iconTitle = null;
+      state.iconSource = null;
+      readout.className = "icon-detection fallback";
+      readout.querySelector("span:last-child").textContent =
+        `NO EXACT MATCH // FALLBACK ${state.category.replace(/_/g, " ").toUpperCase()}`;
+    }
+  } catch (error) {
+    $("iconDetection").className = "icon-detection error";
+    $("iconDetection").querySelector("span:last-child").textContent = "CATALOG SEARCH UNAVAILABLE";
+    log(`[ERR] ${escapeHtml(error.message)}`, "err");
+  }
+}
+
+document.querySelectorAll(".icon-mode").forEach((button) => {
+  button.addEventListener("click", () => setIcon(button.dataset.iconKey));
+});
+
+$("iconSearch").addEventListener("input", (event) => {
+  clearTimeout(iconSearchTimer);
+  iconSearchTimer = setTimeout(() => detectIcon(event.target.value || state.name), 220);
+});
+
 /* ============ NAME + TRANSPARENT ============ */
 $("name").addEventListener("input", (e) => {
   state.name = e.target.value;
   syncCli();
+  if (state.icon === "auto") {
+    clearTimeout(iconSearchTimer);
+    iconSearchTimer = setTimeout(() => detectIcon(state.name), 220);
+  }
 });
 $("transparent").addEventListener("change", (e) => {
   state.transparent = e.target.checked;
@@ -157,6 +257,7 @@ $("transparent").addEventListener("change", (e) => {
 /* ============ CLI SNIPPET ============ */
 function syncCli() {
   const name = (state.name || "").toUpperCase() || "…";
+  const displayedName = escapeHtml(name);
   const args = [
     `--name "${name}"`,
     `--category ${state.category}`,
@@ -164,18 +265,20 @@ function syncCli() {
     `--theme ${state.theme}`,
     `--size ${state.size}`,
     `--format ${state.format}`,
+    `--icon ${state.icon}`,
   ];
   if (state.transparent) args.push("--transparent");
   _cliText = `python main.py ${args.join(" ")}`;
 
   const parts = [
     '<span class="cmd">python main.py</span>',
-    `--name <b>"${name}"</b>`,
+    `--name <b>"${displayedName}"</b>`,
     `--category <b>${state.category}</b>`,
     `--style <b>${state.style}</b>`,
     `--theme <b>${state.theme}</b>`,
     `--size <b>${state.size}</b>`,
     `--format <b>${state.format}</b>`,
+    `--icon <b>${state.icon}</b>`,
   ];
   if (state.transparent) parts.push(`<b>--transparent</b>`);
   $("cli").innerHTML = parts.join(" \\<br>&nbsp;&nbsp;");
@@ -246,7 +349,7 @@ $("form").addEventListener("submit", async (e) => {
   $("mStatus").textContent = "BUILDING…";
   $("mStatus").className = "amber";
   $("axisId").textContent = "BUILDING";
-  log(`<span class="amber">[REQ]</span> ${state.name} / ${state.category} / ${state.style}-${state.theme}-${state.size}`);
+  log(`<span class="amber">[REQ]</span> ${escapeHtml(state.name)} / ${state.category} / ${state.style}-${state.theme}-${state.size}`);
 
   try {
     const res = await fetch("/api/generate", {
@@ -259,6 +362,7 @@ $("form").addEventListener("submit", async (e) => {
         theme: state.theme,
         size: state.size,
         format: state.format,
+        icon: state.icon,
         transparent_bg: state.transparent,
       }),
     });
@@ -270,7 +374,7 @@ $("form").addEventListener("submit", async (e) => {
     $("mStatus").className = "";
     $("mStatus").style.color = "var(--blood)";
     $("axisId").textContent = "ERROR";
-    log(`<span class="err">[ERR]</span> ${err.message}`, "err");
+    log(`<span class="err">[ERR]</span> ${escapeHtml(err.message)}`, "err");
   } finally {
     btn.disabled = false;
     btn.textContent = "▶ GENERATE";
@@ -303,6 +407,8 @@ function onBuildSuccess(data) {
   $("mTheme").textContent = data.theme.toUpperCase();
   $("mSize").textContent = `${data.size} × ${data.size} PX`;
   $("mFmt").textContent = data.format.toUpperCase();
+  $("mIcon").textContent = data.icon_title.toUpperCase();
+  $("mSource").textContent = `${data.match_method.toUpperCase()} / ${data.icon_source.toUpperCase()}`;
   $("mElapsed").textContent = `${data.elapsed_ms} MS`;
   $("axisId").textContent = `ID ${String(state.builds).padStart(4, "0")}`;
 
@@ -336,7 +442,7 @@ function onBuildSuccess(data) {
   state.recent = state.recent.slice(0, 10);
   renderRecent();
 
-  log(`<span class="ok">[OK]</span> built ${data.name} in ${data.elapsed_ms}ms`, "ok");
+  log(`<span class="ok">[OK]</span> built ${escapeHtml(data.name)} in ${data.elapsed_ms}ms`, "ok");
 }
 
 function _makeSlot(r, num) {
@@ -403,10 +509,31 @@ function renderRecent() {
 }
 
 /* ============ INIT ============ */
-renderCategories();
-renderStyles();
-renderThemes();
-renderFormats();
-updateSliderFill();
-syncCli();
-log(`terminal initialised — ready for build`, "amber");
+async function initialize() {
+  try {
+    const response = await fetch("/api/options");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "option load failed");
+    CATEGORIES = data.categories;
+    STYLES = data.styles;
+    THEMES = data.themes;
+    FORMATS = data.formats;
+    if (!CATEGORIES.includes(state.category)) state.category = CATEGORIES[0];
+    if (!STYLES.includes(state.style)) state.style = STYLES[0];
+    if (!THEMES.includes(state.theme)) state.theme = THEMES[0];
+    if (!FORMATS.includes(state.format)) state.format = FORMATS[0];
+    renderCategories();
+    renderStyles();
+    renderThemes();
+    renderFormats();
+    updateSliderFill();
+    syncCli();
+    await detectIcon(state.name);
+    log(`terminal initialised — ${CATEGORIES.length} categories / catalog online`, "amber");
+  } catch (error) {
+    log(`[ERR] initialisation failed: ${escapeHtml(error.message)}`, "err");
+    $("genBtn").disabled = true;
+  }
+}
+
+initialize();

@@ -4,6 +4,10 @@
 
 **Goal:** Add accurate offline brand detection and custom SVG overrides while retaining single-source procedural fallbacks and identical SVG, PNG, and ICO geometry.
 
+**Implementation status:** Complete on `codex/hybrid-brand-icon-system`; see
+`docs/implementation-summaries/2026-08-02-hybrid-brand-icon-system.md` for the
+delivered behavior and release verification.
+
 **Architecture:** Resolve each request to a normalized `VectorIcon`, compose one authoritative SVG, and rasterize that SVG with `resvg_py`. A pinned Simple Icons registry and sanitized custom registry feed a conservative resolver; generic definitions remain the deterministic fallback.
 
 **Tech Stack:** Python 3.10+, UV, dataclasses, defusedxml, resvg_py 0.3.3, Pillow, Flask, vanilla HTML/CSS/JavaScript, pytest
