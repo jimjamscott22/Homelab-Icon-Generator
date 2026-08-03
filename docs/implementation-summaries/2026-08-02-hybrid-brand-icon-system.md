@@ -13,6 +13,15 @@ security boundaries, compatibility, and verification.
 None. This change is documentation-only and intentionally does not modify the
 application, dependencies, generated output, or tests.
 
+## Implementation Planning
+
+Added an implementation-ready plan at
+`docs/superpowers/plans/2026-08-02-hybrid-brand-icon-system.md`. It divides the
+approved design into eight independently testable commits covering the vector
+model, generic migration, SVG rasterization, pinned catalog, resolver, custom
+icons, web controls, and release verification. Runtime implementation has not
+started.
+
 ## Verification
 
 - Reviewed the specification for incomplete placeholders.
