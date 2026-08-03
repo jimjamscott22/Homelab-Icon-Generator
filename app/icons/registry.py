@@ -50,6 +50,11 @@ class CatalogRegistry:
     def __len__(self) -> int:
         return len(self._icons)
 
+    @property
+    def icons(self) -> tuple[VectorIcon, ...]:
+        """Return icons in stable key order for metadata and merged registries."""
+        return self._icons
+
     def get(self, key: str) -> VectorIcon | None:
         """Return an icon by its canonical catalog key."""
         return self._by_key.get(key)
@@ -79,3 +84,42 @@ class CatalogRegistry:
 def load_builtin_registry() -> CatalogRegistry:
     """Load and cache the brand catalog distributed with the application."""
     return CatalogRegistry(load_builtin_icons())
+
+
+class CombinedRegistry:
+    """A custom-first view over local and bundled icon registries."""
+
+    def __init__(self, custom, builtin: CatalogRegistry) -> None:
+        self._custom = custom
+        self._builtin = builtin
+        warnings = []
+        from app.icons.custom import CustomIconDiagnostic
+
+        for icon in custom.icons.values():
+            if builtin.get(icon.key) is not None or builtin.exact(icon.title) is not None:
+                warnings.append(
+                    CustomIconDiagnostic(
+                        icon.key,
+                        icon.key,
+                        "warning",
+                        "custom icon overrides a bundled catalog match",
+                    )
+                )
+        self.diagnostics = (*custom.diagnostics, *warnings)
+
+    def get(self, key: str) -> VectorIcon | None:
+        return self._custom.get(key) or self._builtin.get(key)
+
+    def exact(self, query: str) -> VectorIcon | None:
+        return self._custom.exact(query) or self._builtin.exact(query)
+
+    def suggest(self, query: str, *, limit: int = 8) -> tuple[VectorIcon, ...]:
+        merged: dict[str, VectorIcon] = {}
+        for icon in self._custom.suggest(query, limit=limit):
+            merged[icon.key] = icon
+        for icon in self._builtin.suggest(query, limit=limit):
+            merged.setdefault(icon.key, self._custom.get(icon.key) or icon)
+        return tuple(merged.values())[:limit]
+
+    def diagnostic_for(self, key: str):
+        return self._custom.diagnostic_for(key)

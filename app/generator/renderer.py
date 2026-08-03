@@ -149,6 +149,9 @@ def generate_icon_result(
     return GenerationResult(paths=paths, resolution=resolution)
 
 
-def generate_icon(request: IconRequest) -> dict[str, str]:
+def generate_icon(
+    request: IconRequest,
+    resolver: Resolver | None = None,
+) -> dict[str, str]:
     """Backward-compatible paths-only generation API."""
-    return generate_icon_result(request).paths
+    return generate_icon_result(request, resolver=resolver).paths

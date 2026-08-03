@@ -7,7 +7,7 @@ from functools import lru_cache
 from app.icons.generic import get_generic_icon
 from app.icons.models import IconResolution, VectorIcon
 from app.icons.naming import normalize_icon_name
-from app.icons.registry import CatalogRegistry, load_builtin_registry
+from app.icons.registry import CatalogRegistry, CombinedRegistry, load_builtin_registry
 from app.models.icon_request import IconRequest
 
 
@@ -27,7 +27,7 @@ def strip_deployment_suffix(value: str) -> str:
 class IconResolver:
     """Resolve exact brand matches while keeping fuzzy search advisory-only."""
 
-    def __init__(self, catalog: CatalogRegistry) -> None:
+    def __init__(self, catalog: CatalogRegistry | CombinedRegistry) -> None:
         self._catalog = catalog
 
     def resolve(self, request: IconRequest) -> IconResolution:
@@ -38,6 +38,12 @@ class IconResolver:
         if selection != "auto":
             icon = self._catalog.get(selection)
             if icon is None:
+                diagnostic_for = getattr(self._catalog, "diagnostic_for", None)
+                diagnostic = diagnostic_for(selection) if diagnostic_for else None
+                if diagnostic is not None:
+                    raise ValueError(
+                        f"Custom icon '{selection}' is unavailable: {diagnostic.message}"
+                    )
                 suggestions = self.suggest(selection, limit=3)
                 hint = ""
                 if suggestions:
@@ -89,11 +95,20 @@ class IconResolver:
 @lru_cache(maxsize=1)
 def get_default_resolver() -> IconResolver:
     """Return the process-wide resolver backed by bundled offline data."""
-    return IconResolver(load_builtin_registry())
+    return build_resolver()
+
+
+def build_resolver(icon_dir: str | None = None) -> IconResolver:
+    """Build a resolver using explicit, environment, or working-directory custom data."""
+    from app.icons.custom import load_custom_registry, resolve_custom_icon_dir
+
+    custom = load_custom_registry(resolve_custom_icon_dir(icon_dir))
+    return IconResolver(CombinedRegistry(custom, load_builtin_registry()))
 
 
 __all__ = [
     "IconResolver",
+    "build_resolver",
     "get_default_resolver",
     "normalize_icon_name",
     "strip_deployment_suffix",

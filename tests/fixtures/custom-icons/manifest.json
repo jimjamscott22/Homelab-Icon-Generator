@@ -1,0 +1,13 @@
+{
+  "icons": [
+    {
+      "aliases": [
+        "corp api",
+        "private api"
+      ],
+      "file": "internal-api.svg",
+      "key": "internal-api",
+      "name": "Internal API"
+    }
+  ]
+}
