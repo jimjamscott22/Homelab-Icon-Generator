@@ -1,0 +1,10 @@
+{
+  "docker engine": "docker",
+  "ha": "homeassistant",
+  "home assistant core": "homeassistant",
+  "immich server": "immich",
+  "nextcloud server": "nextcloud",
+  "pi hole": "pihole",
+  "plex media server": "plex",
+  "proxmox ve": "proxmox"
+}

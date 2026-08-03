@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Nextcloud",
+    "slug": "nextcloud",
+    "hex": "0082C9",
+    "source": "https://nextcloud.com/press/"
+  },
+  {
+    "title": "Home Assistant",
+    "slug": "homeassistant",
+    "hex": "18BCF2",
+    "source": "https://www.home-assistant.io/",
+    "guidelines": "https://developers.home-assistant.io/docs/voice/branding/",
+    "license": {
+      "type": "CC-BY-4.0"
+    },
+    "aliases": {
+      "aka": [
+        "Home Assistant Core"
+      ],
+      "old": [
+        "Hass"
+      ]
+    }
+  }
+]
