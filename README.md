@@ -1,24 +1,28 @@
 # Homelab Icon Generator
 
-Generate clean, consistent icons for homelab devices and services using Python.
+Generate consistent homelab icons with recognizable brand geometry, safe local
+SVG overrides, and procedural fallbacks. Normal generation is offline: the
+application ships a pinned Simple Icons catalog and never fetches artwork at
+request time.
 
-## Overview
+## Highlights
 
-Homelab Icon Generator is a Python CLI tool for creating simple, visually consistent icons for devices and services commonly found in self-hosted environments.
+- 3,450 bundled brands from Simple Icons 16.27.0
+- Conservative automatic detection: exact names and reviewed aliases only
+- Fuzzy suggestions for manual selection, never silent fuzzy auto-matches
+- Sanitized custom SVG icons and custom-over-built-in overrides
+- 24 procedural fallback categories with initials
+- One authoritative SVG composition for SVG, PNG, and ICO geometry
+- Minimal, terminal, and cyberpunk styles with five color themes
+- Accessible web search/override controls and resolution metadata
+- PNG, SVG, ICO, `both`, and `all` output modes
 
-Icons are generated programmatically using geometric shapes and text — no external icon packs required. Output is available in PNG (raster), SVG (vector), and ICO formats, suitable for dashboards, network monitors, and internal apps.
+Brand and custom geometry is recolored using the selected theme and omits
+initials. Unknown names retain the selected generic category and initials.
 
-## Features
+## Install
 
-- 24 device/service categories (server, router, Raspberry Pi, container, database, and more)
-- 3 visual styles: minimal, terminal, cyberpunk
-- 5 color themes: green, blue, orange, purple, grayscale
-- PNG, SVG, and ICO export (ICO is limited to sizes up to 256px)
-- Automatic initials from name (e.g. "Raspberry Pi Server" → RPS)
-- Optional transparent background
-- CLI and JSON batch mode
-
-## Installation
+This project uses [UV](https://docs.astral.sh/uv/):
 
 ```bash
 git clone https://github.com/jimjamscott22/Homelab-Icon-Generator.git
@@ -26,39 +30,50 @@ cd Homelab-Icon-Generator
 uv sync
 ```
 
-> Alternatively, install with pip: `pip install -e .`
+## CLI usage
 
-## Usage
-
-### Single icon
+Automatic brand detection is the default:
 
 ```bash
-uv run main.py \
-  --name "Raspberry Pi Server" \
-  --category raspberry_pi \
-  --style terminal \
-  --theme green \
+uv run python main.py \
+  --name "Nextcloud" \
+  --category cloud_service \
+  --style minimal \
+  --theme blue \
   --size 256 \
-  --format svg
+  --format both
 ```
 
-### All CLI flags
+Control identity with `--icon`:
+
+```bash
+# Require this exact bundled/custom key
+uv run python main.py --name "Private Cloud" --category cloud_service --icon nextcloud
+
+# Bypass brand detection and force the category artwork
+uv run python main.py --name "Nextcloud" --category cloud_service --icon generic
+```
 
 | Flag | Default | Description |
-|------|---------|-------------|
+|---|---:|---|
 | `--name` | required | Device or service name |
-| `--category` | required | See valid categories below |
-| `--style` | `minimal` | `minimal` / `terminal` / `cyberpunk` |
-| `--theme` | `blue` | `green` / `blue` / `orange` / `purple` / `grayscale` |
-| `--size` | `256` | Icon size in pixels (32–2048) |
-| `--format` | `both` | `png` / `svg` / `ico` / `both` / `all` |
-| `--output-dir` | `output` | Directory to save files into |
-| `--transparent` | off | Enable transparent background |
-| `--batch` | — | Path to a JSON batch file |
+| `--category` | required | Generic fallback category |
+| `--icon` | `auto` | `auto`, `generic`, or an exact stable icon key |
+| `--icon-dir` | — | Custom icon directory; overrides environment/default discovery |
+| `--style` | `minimal` | `minimal`, `terminal`, or `cyberpunk` |
+| `--theme` | `blue` | `green`, `blue`, `orange`, `purple`, or `grayscale` |
+| `--size` | `256` | Square size from 32 through 2048 pixels |
+| `--format` | `both` | `png`, `svg`, `ico`, `both`, or `all` |
+| `--output-dir` | `output` | Output root directory |
+| `--transparent` | off | Use a transparent canvas |
+| `--batch` | — | JSON-array or NDJSON batch file |
 
-### Valid categories
+ICO output is limited to 256px. Files remain grouped by fallback category at
+`output/{format}/{category}/{slug}-{style}-{theme}-{size}.{ext}`.
 
-```
+### Categories
+
+```text
 raspberry_pi  server       router        switch
 laptop        desktop      phone         iot
 container     database     cloud_service generic_service
@@ -69,127 +84,142 @@ firewall      vpn          nas           power
 
 ### Batch generation
 
-Create a JSON array of icon configs:
+Every entry accepts the same request fields, including `icon`:
 
 ```json
 [
   {
     "name": "Nextcloud",
     "category": "cloud_service",
+    "icon": "auto",
     "style": "minimal",
     "theme": "blue",
-    "size": 256,
     "format": "both"
   },
   {
-    "name": "Home Router",
-    "category": "router",
+    "name": "Unknown NAS",
+    "category": "nas",
+    "icon": "generic",
     "style": "terminal",
     "theme": "green"
   }
 ]
 ```
 
-Run with:
-
 ```bash
-uv run main.py --batch examples/sample_icons.json
+uv run python main.py --batch examples/sample_icons.json
 ```
 
-Each entry uses the same keys as the CLI flags. All fields except `name` and `category` are optional and fall back to defaults.
+NDJSON is streamed line by line and is preferred for large batches.
 
-## Web UI
+## Custom icons
 
-Start the local web server:
+Directory precedence is:
+
+1. `--icon-dir`
+2. `HOMELAB_ICON_DIR`
+3. `custom-icons/manifest.json` under the working directory
+
+Manifest format:
+
+```json
+{
+  "icons": [
+    {
+      "key": "internal-api",
+      "name": "Internal API",
+      "file": "internal-api.svg",
+      "aliases": ["corp api", "private api"]
+    }
+  ]
+}
+```
+
+Custom files may contain geometry elements (`path`, `rect`, `circle`, `ellipse`,
+`line`, `polygon`, `polyline`, and `g`) with validated attributes and finite
+transforms. Scripts, event handlers, external resources, images, text,
+animation, definitions/references, `foreignObject`, and malformed geometry are
+rejected and reported as diagnostics. See [custom-icons/README.md](custom-icons/README.md).
+
+## Web UI and API
 
 ```bash
 uv run python server.py
 ```
 
-Then open http://127.0.0.1:5000 in your browser.
+Open <http://127.0.0.1:5000>. The UI loads all option lists from the backend,
+shows automatic detection/fallback state, provides searchable manual overrides,
+and includes the selected icon in its equivalent CLI command.
 
-![Web UI](web-shot.png)
+API endpoints:
 
-What the UI does: it lets you pick a category, style, theme, size, and format, then generates icons on demand and shows the resulting files for download.
+- `GET /api/options` — categories, styles, themes, formats, and diagnostics
+- `GET /api/icons/search?q=Nextclod` — exact match plus advisory suggestions
+- `POST /api/generate` — files plus icon key/source/match/fallback metadata
 
-Generated files are served from `/output/<path>` and written to the local `output/` directory.
+Optional server variables are `PORT`, `FLASK_DEBUG`, `GENERATE_RATE_LIMIT`,
+`GENERATE_RATE_WINDOW`, and `HOMELAB_ICON_DIR`.
 
-On disk, files are written under `output/{format}/{category}/` with slugified filenames.
+## Catalog maintenance
 
-Other storage options:
+Normal generation has no network path. A maintainer refreshes the committed
+catalog explicitly:
 
-- Change `OUTPUT_DIR` in `server.py` to point at a different location.
-- Replace `output/` with a symlink to a folder on another disk or a synced directory.
-
-Optional environment variables:
-
-- `PORT` to change the port (default `5000`)
-- `FLASK_DEBUG=1` to enable debug mode
-
-## Project structure
-
-```
-homelab-icon-generator/
-├── app/
-│   ├── generator/
-│   │   ├── colors.py       # Color palettes per theme
-│   │   ├── layouts.py      # Symbol/text positioning
-│   │   ├── renderer.py     # PNG and SVG rendering pipeline
-│   │   ├── shapes.py       # Pillow drawing helpers
-│   │   ├── symbols.py      # Procedural symbols per category
-│   │   └── text_utils.py   # Initials rendering
-│   ├── models/
-│   │   └── icon_request.py # IconRequest dataclass
-│   ├── styles/
-│   │   ├── base.py         # StyleDefinition dataclass
-│   │   ├── minimal.py
-│   │   ├── terminal.py
-│   │   └── cyberpunk.py
-│   ├── utils/
-│   │   ├── naming.py       # Initials generation
-│   │   └── validation.py   # Input validation
-│   ├── web/
-│   │   └── static/         # Web UI assets (HTML/CSS/JS)
-│   └── main.py             # CLI entry point
-├── examples/
-│   └── sample_icons.json
-├── output/                 # Generated icons land here
-├── server.py               # Flask web UI
-├── pyproject.toml          # Dependencies and packaging
-└── main.py                 # Root entry point (delegates to app/main.py)
+```bash
+uv run python -m scripts.sync_simple_icons \
+  --version 16.27.0 \
+  --aliases app/icons/data/homelab-aliases.json \
+  --output app/icons/data \
+  --notice docs/THIRD_PARTY_ICONS.md
 ```
 
-## Extending the project
+The generated manifest records the npm archive URL, archive SHA-256, catalog
+content SHA-256, version, and icon count. Legal/provenance notes are in
+[docs/THIRD_PARTY_ICONS.md](docs/THIRD_PARTY_ICONS.md).
 
-### Add a new category
+## Architecture
 
-1. Add the category name to `VALID_CATEGORIES` in `app/utils/validation.py`
-2. Add a `draw_<category>(draw, cx, cy, size, color)` function in `app/generator/symbols.py`
-3. Add a matching `_svg_<category>(cx, cy, size, color)` function in `app/generator/renderer.py`
-4. Register both in their respective dispatcher dicts
+```text
+CLI / batch / web request
+  -> IconRequest validation
+  -> explicit/custom/bundled/exact-suffix/generic resolution
+  -> normalized VectorIcon
+  -> one SVG composition
+  -> direct SVG output + resvg rasterization
+  -> PNG and optional ICO packaging
+```
 
-### Add a new style
+Key modules:
 
-1. Create `app/styles/<name>.py` with a `get_style(palette: ColorPalette) -> StyleDefinition` function
-2. Add the name to `VALID_STYLES` in `app/utils/validation.py`
+- `app/icons/` — models, generic artwork, catalog, custom sanitizer, registries,
+  and resolver
+- `app/generator/svg_composer.py` — frame, theme, geometry, glow, and initials
+- `app/generator/rasterizer.py` — `resvg_py` adapter
+- `app/generator/renderer.py` — validation and file orchestration
+- `scripts/` — pinned catalog sync and representative contact sheet
 
-### Add a new theme
+To add a generic category, add its key to `VALID_CATEGORIES`, define one
+`VectorIcon` in the appropriate `app/icons/generic/` module, and register it in
+`app/icons/generic/__init__.py`. There is no separate PNG implementation.
 
-1. Add a `ColorPalette` entry to `COLOR_THEMES` in `app/generator/colors.py`
-2. Add the name to `VALID_THEMES` in `app/utils/validation.py`
+## Verification
 
-## Roadmap
+```bash
+uv run pytest -q
+uv build
+git diff --check
+```
 
-See [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md) for the review findings and
-the ranked list of planned features, including what has already been completed
-and what remains.
+Generate the representative brand/custom/generic contact sheet with:
 
-## Tech stack
-
-- Python 3.10+
-- [Pillow](https://pillow.readthedocs.io/) — PNG generation
-- SVG output is built as native XML (no external SVG library required)
+```bash
+uv run python -m scripts.generate_contact_sheet \
+  --icon-dir tests/fixtures/custom-icons \
+  --output output/contact-sheet.png
+```
 
 ## License
 
-MIT
+Application code is MIT licensed. Product names, logos, and brands remain the
+property of their respective owners; see the third-party notice for catalog
+details.

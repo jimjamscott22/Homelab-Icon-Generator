@@ -30,8 +30,8 @@ def get_style(palette: ColorPalette) -> StyleDefinition:
         fg_color=palette.accent,
         accent_color=palette.accent,
         text_color=_brighten(palette.text, 0.2),
-        border_width=3,
-        corner_radius=8,
+        border_width_ratio=3 / 256,
+        corner_radius_ratio=8 / 256,
         use_glow=True,
         font_scale=1.1,
     )

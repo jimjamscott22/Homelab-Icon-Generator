@@ -48,6 +48,12 @@ def test_unknown_format_rejected():
         validate_request(_request(format="tiff"))
 
 
+@pytest.mark.parametrize("icon", ["", "   ", None])
+def test_empty_icon_selection_rejected(icon):
+    with pytest.raises(ValueError, match="icon"):
+        validate_request(_request(icon=icon))
+
+
 @pytest.mark.parametrize("size", [31, 2049, 0, -1])
 def test_size_out_of_range_rejected(size):
     with pytest.raises(ValueError, match="out of range"):

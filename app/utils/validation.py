@@ -30,7 +30,7 @@ _ICO_FORMATS = {"ico", "all"}
 def validate_request(request: IconRequest) -> None:
     """Validate an IconRequest, raising ValueError on the first invalid field.
 
-    Checks name, category, style, theme, format, and size.
+    Checks name, category, style, theme, format, icon selection, and size.
     """
     if not request.name or not request.name.strip():
         raise ValueError("name must not be empty")
@@ -54,6 +54,8 @@ def validate_request(request: IconRequest) -> None:
             f"Invalid format '{request.format}'. "
             f"Valid options: {sorted(VALID_FORMATS)}"
         )
+    if not isinstance(request.icon, str) or not request.icon.strip():
+        raise ValueError("icon must be 'auto', 'generic', or a non-empty stable key")
     if not (_MIN_SIZE <= request.size <= _MAX_SIZE):
         raise ValueError(
             f"Size {request.size} is out of range. "

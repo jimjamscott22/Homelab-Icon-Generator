@@ -15,8 +15,8 @@ def get_style(palette: ColorPalette) -> StyleDefinition:
         fg_color=palette.fg,
         accent_color=palette.accent,
         text_color=palette.text,
-        border_width=2,
-        corner_radius=16,
+        border_width_ratio=2 / 256,
+        corner_radius_ratio=16 / 256,
         use_glow=False,
         font_scale=1.0,
     )

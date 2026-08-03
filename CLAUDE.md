@@ -1,90 +1,112 @@
 # CLAUDE.md
 
-## Running the project
+## Project overview
 
-This project uses [uv](https://docs.astral.sh/uv/) for dependency and environment management. Dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
+Homelab Icon Generator is a Python 3.10+ CLI and local Flask application for
+creating styled dashboard icons. Known names resolve against a pinned offline
+Simple Icons catalog, local custom SVGs can override bundled brands, and unknown
+names use one of 24 generic categories. Brand/custom geometry omits initials;
+generic geometry retains them.
 
-Sync the environment:
+Use UV for every dependency and execution workflow:
+
 ```bash
 uv sync
+uv run python main.py --name "Nextcloud" --category cloud_service --format both
+uv run python server.py
+uv run pytest -q
+uv build
 ```
 
-Single icon:
+Batch input supports JSON arrays and streaming NDJSON. Prefer NDJSON for large
+batches. Output stays under `output/{format}/{category}/` and filenames remain
+category-compatible even when brand artwork is selected.
+
+## Runtime pipeline
+
+```text
+IconRequest + validation
+  -> IconResolver
+       explicit key
+       custom exact key/title/alias
+       bundled exact key/title/reviewed alias
+       controlled deployment-suffix removal
+       generic category fallback
+  -> IconResolution + VectorIcon
+  -> SvgComposer (authoritative rendering)
+  -> SVG write and resvg_py rasterization
+  -> PNG / ICO packaging
+```
+
+Fuzzy matching is suggestion-only and must never select artwork automatically.
+Normal generation must not access the network.
+
+## Module boundaries
+
+- `app/icons/models.py`: immutable `VectorNode`, `VectorIcon`, `IconResolution`
+- `app/icons/generic/`: single-source procedural category geometry
+- `app/icons/catalog.py`: bundled package-data loading
+- `app/icons/registry.py`: built-in and custom-first indexes
+- `app/icons/resolver.py`: matching precedence, suffix control, suggestions
+- `app/icons/custom.py`: manifest validation and geometry-only SVG sanitization
+- `app/generator/svg_composer.py`: presentation, safe area, glow, initials
+- `app/generator/rasterizer.py`: resvg adapter returning Pillow RGBA images
+- `app/generator/renderer.py`: validation, orchestration, and output paths
+- `server.py`: API metadata/search/generation and static UI
+- `scripts/sync_simple_icons.py`: maintainer-only pinned catalog import
+
+Keep new features modular. Generic geometry belongs in the focused domain file,
+not in the renderer. SVG remains the source of truth; do not introduce a second
+Pillow drawing implementation.
+
+## Identity and compatibility rules
+
+`IconRequest.icon` defaults to `auto`:
+
+- `auto`: exact custom/bundled resolution, then generic fallback
+- `generic`: force the category and initials
+- other value: require that exact stable key or raise with suggestions
+
+Name normalization uses Unicode NFKC, case folding, punctuation replacement,
+and whitespace collapse. Only controlled trailing words (`app`, `service`,
+`server`, `instance`, `container`, `vm`) may be removed after exact lookup.
+
+Validation ranges:
+
+- category: one of the 24 `VALID_CATEGORIES`
+- style: minimal, terminal, cyberpunk
+- theme: green, blue, orange, purple, grayscale
+- format: png, svg, ico, both, all
+- size: 32-2048; ICO/all require 256 or smaller
+
+## Custom icon safety
+
+Directory precedence is explicit CLI/server configuration,
+`HOMELAB_ICON_DIR`, then `custom-icons/manifest.json` in the working directory.
+The sanitizer permits only normalized geometry and finite transforms. Reject
+active content, event handlers, external references, images, text, animation,
+definitions, unsupported namespaces/elements/attributes, and non-finite data.
+Invalid entries are isolated in diagnostics; an explicit invalid key must report
+its specific diagnostic.
+
+## Catalog lifecycle
+
+The bundled snapshot is Simple Icons 16.27.0. Refresh it only through
+`scripts/sync_simple_icons.py`, retain reviewed aliases, and review the generated
+manifest/checksums and `docs/THIRD_PARTY_ICONS.md`. Runtime code must not depend
+on Node.js or a remote catalog.
+
+## Verification expectations
+
+For relevant changes run focused tests, then the complete gate:
+
 ```bash
-uv run python main.py --name "Nextcloud" --category cloud_service --style minimal --theme blue --size 256 --format both
+uv run pytest -q
+uv build
+git diff --check
 ```
 
-Batch mode:
-```bash
-uv run python main.py --batch examples/sample_icons.json
-```
-
-The batch file may be either a JSON array (`[{...}, {...}]`) or NDJSON (one JSON object per line). The JSON array path is loaded fully into memory via `json.load`; the NDJSON path is streamed line-by-line. **Prefer NDJSON for large batches** to keep memory flat — see `_iter_batch_entries` in `app/main.py`.
-
-Output files land in `output/{format}/{category}/` with slugified filenames: `{slug}-{style}-{theme}-{size}.{ext}` — e.g. `output/png/cloud_service/nextcloud-minimal-blue-256.png`. Output directories are created automatically on first write; the `.gitkeep` file keeps the `output/` directory in version control while generated files are ignored.
-
-## Architecture
-
-The pipeline flows through these layers:
-
-```
-CLI args / JSON entry
-    → IconRequest (app/models/icon_request.py)
-    → validate_request (app/utils/validation.py)
-    → get_palette (app/generator/colors.py)        # theme → ColorPalette
-    → get_style (app/styles/<style>.py)            # palette → StyleDefinition
-    → get_layout (app/generator/layouts.py)        # size → LayoutSpec
-    → render_png / render_svg (app/generator/renderer.py)
-    → save to output/{format}/{category}/
-```
-
-## Key design decisions
-
-- **Symbols are fully procedural**: all coordinates are expressed as fractions of `size` (e.g. `int(size * 0.28)`), so every symbol scales correctly from 32px to 2048px. Never use hardcoded pixel values in symbol or renderer code.
-
-- **Glow effect is SVG-only**: PNG ignores `StyleDefinition.use_glow`. SVG uses `<feGaussianBlur>` in a `<defs>` filter. This was a deliberate choice — Pillow glow requires multi-pass rendering, while SVG supports it natively.
-
-- **SVG is hand-built XML**: the renderer builds SVG strings directly rather than using svgwrite. This gives full control over filter elements and keeps the output readable.
-
-- **Style modules are stateless**: each `app/styles/<name>.py` exports only `get_style(palette) -> StyleDefinition`. Adding a new style is self-contained — no central registry to update beyond `VALID_STYLES`.
-
-- **Styles are loaded via importlib**: `renderer.py` uses `importlib.import_module(f"app.styles.{request.style}")` to avoid a hard import of every style module and to keep the style list as the single source of truth in `validation.py`.
-
-## Performance & Debugging
-
-### Memory Efficiency
-
-- **Batch processing**: NDJSON streaming keeps memory flat for large batches; JSON array path loads fully into memory
-- **Symbol rendering**: All coordinates are fractional (no per-size computation), so scaling up is cheap
-- For large batches (1000+ icons), prefer NDJSON input
-
-### Profiling & Analysis
-
-See [docs/PERFORMANCE_FINDINGS.md](docs/PERFORMANCE_FINDINGS.md) for detailed performance characteristics and optimization strategies discovered during recent profiling work.
-
-## Extending the project
-
-### New category
-
-1. `app/utils/validation.py` — add to `VALID_CATEGORIES`
-2. `app/generator/symbols.py` — add `draw_<category>(draw, cx, cy, size, color)` using only fractional coordinates; register in `SYMBOL_DRAWERS`
-3. `app/generator/renderer.py` — add `_svg_<category>(cx, cy, size, color)` mirroring the PIL version; register in `_SVG_SYMBOL_FUNCS`
-
-### New style
-
-1. Create `app/styles/<name>.py` with `get_style(palette: ColorPalette) -> StyleDefinition`
-2. `app/utils/validation.py` — add to `VALID_STYLES`
-
-### New theme
-
-1. `app/generator/colors.py` — add entry to `COLOR_THEMES`
-2. `app/utils/validation.py` — add to `VALID_THEMES`
-
-## Validation rules
-
-- `name`: required, non-empty
-- `category`: must be in `VALID_CATEGORIES` (24 values)
-- `style`: must be in `VALID_STYLES` (minimal, terminal, cyberpunk)
-- `theme`: must be in `VALID_THEMES` (green, blue, orange, purple, grayscale)
-- `format`: must be in `VALID_FORMATS` (png, svg, ico, both, all)
-- `size`: integer between 32 and 2048 inclusive; ICO output additionally requires size <= 256
+Use `scripts/generate_contact_sheet.py` for representative visual regression.
+For web changes, verify desktop and mobile layouts, automatic detection, typo
+fallback, manual override, accessible pressed states, generated preview, and
+console cleanliness.

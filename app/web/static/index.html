@@ -4,9 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HOMELAB // ICONOGRAPHY TERMINAL</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bungee+Stencil&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -27,6 +25,21 @@
         <div class="field">
           <h2>Designation <span class="k">[A-Z]</span></h2>
           <input class="input" id="name" placeholder="NEXTCLOUD / NAS-01 / PIHOLE" value="NEXTCLOUD" required maxlength="64">
+        </div>
+
+        <div class="field icon-field">
+          <h2>Icon Identity <span class="k">[AUTO / OVERRIDE]</span></h2>
+          <div class="icon-detection" id="iconDetection" role="status" aria-live="polite">
+            <span class="signal"></span>
+            <span>SCANNING CATALOG…</span>
+          </div>
+          <div class="icon-mode-row" aria-label="Icon selection mode">
+            <button type="button" class="icon-mode" data-icon-key="auto" aria-pressed="true">AUTO</button>
+            <button type="button" class="icon-mode" data-icon-key="generic" aria-pressed="false">GENERIC</button>
+          </div>
+          <label class="sr-only" for="iconSearch">Search brand icons</label>
+          <input class="input icon-search" id="iconSearch" type="search" placeholder="SEARCH 3,450 BRANDS" maxlength="64">
+          <div class="icon-suggestions" id="iconSuggestions" aria-label="Brand icon suggestions"></div>
         </div>
 
         <div class="field">
@@ -121,6 +134,8 @@
               <dt>THEME</dt>     <dd id="mTheme">—</dd>
               <dt>SIZE</dt>      <dd id="mSize">—</dd>
               <dt>FORMAT</dt>    <dd id="mFmt">—</dd>
+              <dt>ICON</dt>      <dd id="mIcon">—</dd>
+              <dt>SOURCE</dt>    <dd id="mSource">—</dd>
               <dt>ELAPSED</dt>   <dd id="mElapsed">—</dd>
             </dl>
           </div>

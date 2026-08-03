@@ -6,6 +6,7 @@ import sys
 from typing import Any, Iterator
 
 from app.generator.renderer import generate_icon
+from app.icons.resolver import build_resolver
 from app.models.icon_request import IconRequest
 
 
@@ -20,9 +21,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--theme", type=str, default="blue", help="green / blue / orange / purple / grayscale")
     parser.add_argument("--size", type=int, default=256, help="Icon size in pixels")
     parser.add_argument("--format", type=str, default="both", help="png / svg / both")
+    parser.add_argument(
+        "--icon",
+        type=str,
+        default="auto",
+        help="auto / generic / stable icon key such as nextcloud",
+    )
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory")
     parser.add_argument("--transparent", action="store_true", default=False, help="Enable transparent background")
     parser.add_argument("--batch", type=str, default=None, help="Path to JSON batch file")
+    parser.add_argument(
+        "--icon-dir",
+        type=str,
+        default=None,
+        help="Directory containing custom icon manifest.json and SVG files",
+    )
 
     return parser, parser.parse_args()
 
@@ -35,11 +48,18 @@ def run_single(args: argparse.Namespace) -> None:
         theme=args.theme,
         size=args.size,
         format=args.format,
+        icon=args.icon,
         transparent_bg=args.transparent,
         output_dir=args.output_dir,
     )
     try:
-        paths = generate_icon(request)
+        icon_dir = getattr(args, "icon_dir", None)
+        resolver = build_resolver(icon_dir) if icon_dir else None
+        paths = (
+            generate_icon(request, resolver=resolver)
+            if resolver is not None
+            else generate_icon(request)
+        )
         for fmt, path in paths.items():
             print(f"  [{fmt.upper()}] {path}")
     except ValueError as e:
@@ -78,7 +98,7 @@ def _iter_batch_entries(json_path: str) -> Iterator[dict[str, Any]]:
                 yield entry
 
 
-def run_batch(json_path: str, output_dir: str) -> None:
+def run_batch(json_path: str, output_dir: str, icon_dir: str | None = None) -> None:
     """Load a batch file and generate each icon entry."""
 
     succeeded, failed = 0, 0
@@ -92,10 +112,16 @@ def run_batch(json_path: str, output_dir: str) -> None:
                 theme=entry.get("theme", "blue"),
                 size=entry.get("size", 256),
                 format=entry.get("format", "both"),
+                icon=entry.get("icon", "auto"),
                 transparent_bg=entry.get("transparent_bg", False),
                 output_dir=entry.get("output_dir", output_dir),
             )
-            paths = generate_icon(request)
+            resolver = build_resolver(icon_dir) if icon_dir else None
+            paths = (
+                generate_icon(request, resolver=resolver)
+                if resolver is not None
+                else generate_icon(request)
+            )
             print(f"  [OK] {name}")
             for fmt, path in paths.items():
                 print(f"    [{fmt.upper()}] {path}")
@@ -111,7 +137,7 @@ def main() -> None:
     parser, args = parse_args()
 
     if args.batch:
-        run_batch(args.batch, args.output_dir)
+        run_batch(args.batch, args.output_dir, args.icon_dir)
     elif args.name and args.category:
         run_single(args)
     else:
