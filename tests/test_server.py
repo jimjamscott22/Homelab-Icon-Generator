@@ -1,27 +1,27 @@
-"""Flask API coverage for backend options, icon search, and resolution metadata."""
+"""FastAPI coverage for backend options, icon search, and resolution metadata."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
-import server
+from app.web import api
 from app.utils.validation import VALID_CATEGORIES, VALID_FORMATS
 
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(server, "OUTPUT_DIR", tmp_path / "output")
-    server._req_times.clear()
-    server.app.config.update(TESTING=True)
-    with server.app.test_client() as test_client:
+    monkeypatch.setattr(api, "OUTPUT_DIR", tmp_path / "output")
+    api._req_times.clear()
+    with TestClient(api.app) as test_client:
         yield test_client
 
 
 def test_options_exposes_every_backend_choice(client) -> None:
     response = client.get("/api/options")
-    data = response.get_json()
+    data = response.json()
 
     assert response.status_code == 200
     assert set(data["categories"]) == VALID_CATEGORIES
@@ -30,8 +30,8 @@ def test_options_exposes_every_backend_choice(client) -> None:
 
 
 def test_search_reports_exact_match_and_advisory_suggestions(client) -> None:
-    exact = client.get("/api/icons/search?q=Nextcloud").get_json()
-    typo = client.get("/api/icons/search?q=Nextclod").get_json()
+    exact = client.get("/api/icons/search?q=Nextcloud").json()
+    typo = client.get("/api/icons/search?q=Nextclod").json()
 
     assert exact["exact"]["key"] == "nextcloud"
     assert exact["exact"]["source"] == "simple-icons"
@@ -49,7 +49,7 @@ def test_generate_reports_brand_resolution_without_breaking_files(client) -> Non
             "size": 128,
         },
     )
-    data = response.get_json()
+    data = response.json()
 
     assert response.status_code == 200
     assert data["icon_key"] == "nextcloud"
@@ -63,7 +63,7 @@ def test_generate_reports_generic_fallback_and_manual_generic(client) -> None:
     fallback = client.post(
         "/api/generate",
         json={"name": "Unknown Private Node", "category": "server", "format": "svg"},
-    ).get_json()
+    ).json()
     forced = client.post(
         "/api/generate",
         json={
@@ -72,7 +72,7 @@ def test_generate_reports_generic_fallback_and_manual_generic(client) -> None:
             "format": "svg",
             "icon": "generic",
         },
-    ).get_json()
+    ).json()
 
     assert fallback["icon_key"] == "server"
     assert fallback["used_fallback"] is True
@@ -92,11 +92,11 @@ def test_unknown_explicit_key_is_a_client_error_with_suggestions(client) -> None
     )
 
     assert response.status_code == 400
-    assert "nextcloud" in response.get_json()["error"]
+    assert "nextcloud" in response.json()["error"]
 
 
 def test_page_has_accessible_override_controls_and_no_external_fonts(client) -> None:
-    page = client.get("/").get_data(as_text=True)
+    page = client.get("/").text
 
     assert 'id="iconDetection"' in page
     assert 'data-icon-key="generic"' in page
