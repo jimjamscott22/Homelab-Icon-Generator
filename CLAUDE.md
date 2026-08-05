@@ -18,6 +18,10 @@ uv run pytest -q
 uv build
 ```
 
+`server.py` reads `PORT` (default 5000), `FLASK_DEBUG` (default off), and
+`GENERATE_RATE_LIMIT`/`GENERATE_RATE_WINDOW` (default 20 requests/60s) for the
+`/api/generate` rate limiter.
+
 Batch input supports JSON arrays and streaming NDJSON. Prefer NDJSON for large
 batches. Output stays under `output/{format}/{category}/` and filenames remain
 category-compatible even when brand artwork is selected.
@@ -49,10 +53,16 @@ Normal generation must not access the network.
 - `app/icons/registry.py`: built-in and custom-first indexes
 - `app/icons/resolver.py`: matching precedence, suffix control, suggestions
 - `app/icons/custom.py`: manifest validation and geometry-only SVG sanitization
+- `app/icons/naming.py`: name normalization for resolution (`normalize_icon_name`) —
+  distinct from `app/utils/naming.py`, which derives display initials
+  (`generate_initials`); don't confuse the two
 - `app/generator/svg_composer.py`: presentation, safe area, glow, initials
+- `app/generator/colors.py` / `layouts.py`: theme palettes and per-style layout geometry
 - `app/generator/rasterizer.py`: resvg adapter returning Pillow RGBA images
 - `app/generator/renderer.py`: validation, orchestration, and output paths
+- `app/styles/`: minimal/terminal/cyberpunk visual style definitions
 - `server.py`: API metadata/search/generation and static UI
+- `app/web/static/`: the static UI itself (`index.html`, `app.js`, `app.css`)
 - `scripts/sync_simple_icons.py`: maintainer-only pinned catalog import
 
 Keep new features modular. Generic geometry belongs in the focused domain file,
