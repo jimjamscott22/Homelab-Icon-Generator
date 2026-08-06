@@ -152,7 +152,7 @@ uv run homelab-icons
 
 Running with no arguments starts the local server and opens
 <http://127.0.0.1:5000> in your browser. Closing the tab shuts the server down
-after about 30 seconds. Re-running while it is already up just reopens the tab.
+after about 90 seconds. Re-running while it is already up just reopens the tab.
 
 For a desktop icon:
 

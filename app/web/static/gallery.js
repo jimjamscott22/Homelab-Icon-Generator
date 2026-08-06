@@ -143,11 +143,16 @@ const Gallery = {
 
 window.Gallery = Gallery;
 
-/* Liveness: the server exits ~30s after these stop arriving. */
+/* Liveness: the server exits ~90s after these stop arriving.
+   Browsers throttle timers in hidden tabs — a background tab's
+   setInterval can drop to firing once a minute — so a ping fires
+   immediately on every hide/show transition too, keeping the
+   timestamp as fresh as possible going into a throttled period. */
 function heartbeat() {
   fetch("/api/alive", { method: "POST", keepalive: true }).catch(() => {});
 }
 heartbeat();
 setInterval(heartbeat, HEARTBEAT_MS);
+document.addEventListener("visibilitychange", heartbeat);
 
 Gallery.refresh();

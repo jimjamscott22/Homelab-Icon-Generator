@@ -240,6 +240,18 @@ def test_alive_probe_identifies_this_service() -> None:
         assert client.get("/api/alive").json()["service"] == api.ALIVE_MARKER
 
 
+def test_heartbeat_default_timeout_tolerates_background_tab_throttling() -> None:
+    """The default must clear the ~60s worst case of Chromium's intensive
+    background-timer throttling (a hidden tab's setInterval can drop to
+    firing once a minute), or switching tabs looks like closing one."""
+    now = [0.0]
+    beat = api.Heartbeat(clock=lambda: now[0])
+    beat.beat()
+
+    now[0] = 65.0
+    assert beat.expired() is False, "a throttled-but-open tab must not be treated as closed"
+
+
 def test_heartbeat_stays_disarmed_until_the_first_ping() -> None:
     clock = iter([0.0, 100.0, 200.0])
     beat = api.Heartbeat(timeout=30.0, clock=lambda: next(clock))

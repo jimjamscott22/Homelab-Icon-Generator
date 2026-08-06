@@ -251,9 +251,15 @@ class Heartbeat:
 
     Stays disarmed until the first ping, so a server whose browser never
     connected will not shut itself down.
+
+    The default timeout is deliberately well above the 5s ping interval:
+    browsers throttle timers in backgrounded tabs, and Chromium's intensive
+    throttling can clamp a hidden tab's setInterval to firing at most once a
+    minute. A shorter timeout would kill the server out from under a user
+    who merely switched tabs, mistaking "backgrounded" for "closed".
     """
 
-    def __init__(self, timeout: float = 30.0, clock=time.monotonic) -> None:
+    def __init__(self, timeout: float = 90.0, clock=time.monotonic) -> None:
         self._timeout = timeout
         self._clock = clock
         self._last: float | None = None
