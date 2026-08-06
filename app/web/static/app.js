@@ -267,10 +267,10 @@ function syncCli() {
     `--icon ${state.icon}`,
   ];
   if (state.transparent) args.push("--transparent");
-  _cliText = `python main.py ${args.join(" ")}`;
+  _cliText = `homelab-icons ${args.join(" ")}`;
 
   const parts = [
-    '<span class="cmd">python main.py</span>',
+    '<span class="cmd">homelab-icons</span>',
     `--name <b>"${displayedName}"</b>`,
     `--category <b>${state.category}</b>`,
     `--style <b>${state.style}</b>`,

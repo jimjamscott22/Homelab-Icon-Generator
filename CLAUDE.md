@@ -2,8 +2,8 @@
 
 ## Project overview
 
-Homelab Icon Generator is a Python 3.10+ CLI and local Flask application for
-creating styled dashboard icons. Known names resolve against a pinned offline
+Homelab Icon Generator is a Python 3.10+ CLI and local FastAPI web application
+for creating styled dashboard icons. Known names resolve against a pinned offline
 Simple Icons catalog, local custom SVGs can override bundled brands, and unknown
 names use one of 24 generic categories. Brand/custom geometry omits initials;
 generic geometry retains them.
@@ -13,14 +13,14 @@ Use UV for every dependency and execution workflow:
 ```bash
 uv sync
 uv run python main.py --name "Nextcloud" --category cloud_service --format both
-uv run python server.py
+uv run homelab-icons  # bare invocation opens the web UI
 uv run pytest -q
 uv build
 ```
 
-`server.py` reads `PORT` (default 5000), `FLASK_DEBUG` (default off), and
+`app/web/api.py` reads `PORT` (default 5000) and
 `GENERATE_RATE_LIMIT`/`GENERATE_RATE_WINDOW` (default 20 requests/60s) for the
-`/api/generate` rate limiter.
+`/api/generate` rate limiter. `FLASK_DEBUG` is retired.
 
 Batch input supports JSON arrays and streaming NDJSON. Prefer NDJSON for large
 batches. Output stays under `output/{format}/{category}/` and filenames remain
@@ -61,8 +61,11 @@ Normal generation must not access the network.
 - `app/generator/rasterizer.py`: resvg adapter returning Pillow RGBA images
 - `app/generator/renderer.py`: validation, orchestration, and output paths
 - `app/styles/`: minimal/terminal/cyberpunk visual style definitions
-- `server.py`: API metadata/search/generation and static UI
-- `app/web/static/`: the static UI itself (`index.html`, `app.js`, `app.css`)
+- `app/web/api.py`: FastAPI routes — metadata, search, generation, history, liveness
+- `app/web/schemas.py`: Pydantic edge models; shape validation only, never domain rules
+- `app/web/history.py`: SQLite gallery store (500-row cap, disk reconciliation)
+- `app/web/launcher.py`: port selection, single-instance probe, uvicorn, heartbeat shutdown
+- `app/web/static/`: the static UI itself (`index.html`, `app.js`, `gallery.js`, `app.css`)
 - `scripts/sync_simple_icons.py`: maintainer-only pinned catalog import
 
 Keep new features modular. Generic geometry belongs in the focused domain file,

@@ -32,10 +32,11 @@ uv sync
 
 ## CLI usage
 
-Automatic brand detection is the default:
+Automatic brand detection is the default. `uv run homelab-icons --name ...` is
+the primary form; `uv run python main.py` still works identically:
 
 ```bash
-uv run python main.py \
+uv run homelab-icons \
   --name "Nextcloud" \
   --category cloud_service \
   --style minimal \
@@ -48,10 +49,10 @@ Control identity with `--icon`:
 
 ```bash
 # Require this exact bundled/custom key
-uv run python main.py --name "Private Cloud" --category cloud_service --icon nextcloud
+uv run homelab-icons --name "Private Cloud" --category cloud_service --icon nextcloud
 
 # Bypass brand detection and force the category artwork
-uv run python main.py --name "Nextcloud" --category cloud_service --icon generic
+uv run homelab-icons --name "Nextcloud" --category cloud_service --icon generic
 ```
 
 | Flag | Default | Description |
@@ -107,7 +108,7 @@ Every entry accepts the same request fields, including `icon`:
 ```
 
 ```bash
-uv run python main.py --batch examples/sample_icons.json
+uv run homelab-icons --batch examples/sample_icons.json
 ```
 
 NDJSON is streamed line by line and is preferred for large batches.
@@ -143,21 +144,36 @@ rejected and reported as diagnostics. See [custom-icons/README.md](custom-icons/
 
 ## Web UI and API
 
+### Web UI
+
 ```bash
-uv run python server.py
+uv run homelab-icons
 ```
 
-Open <http://127.0.0.1:5000>. The UI loads all option lists from the backend,
-shows automatic detection/fallback state, provides searchable manual overrides,
-and includes the selected icon in its equivalent CLI command.
+Running with no arguments starts the local server and opens
+<http://127.0.0.1:5000> in your browser. Closing the tab shuts the server down
+after about 30 seconds. Re-running while it is already up just reopens the tab.
+
+For a desktop icon:
+
+```bash
+uv run python -m scripts.install_shortcut
+```
+
+The UI loads all option lists from the backend, shows automatic
+detection/fallback state, provides searchable manual overrides, and keeps a
+persistent gallery of your last 500 generations. Clicking a gallery tile
+restores the settings that produced it.
 
 API endpoints:
 
 - `GET /api/options` — categories, styles, themes, formats, and diagnostics
 - `GET /api/icons/search?q=Nextclod` — exact match plus advisory suggestions
 - `POST /api/generate` — files plus icon key/source/match/fallback metadata
+- `GET /api/history` — persistent gallery of recent generations
+- `GET /api/alive` — liveness probe used by the heartbeat shutdown
 
-Optional server variables are `PORT`, `FLASK_DEBUG`, `GENERATE_RATE_LIMIT`,
+Optional server variables are `PORT`, `GENERATE_RATE_LIMIT`,
 `GENERATE_RATE_WINDOW`, and `HOMELAB_ICON_DIR`.
 
 ## Catalog maintenance
