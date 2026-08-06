@@ -9,10 +9,12 @@ let galleryExhausted = false;
 const _galleryKeys = new Set();
 
 function _recordKey(record) {
-  return [
-    record.name, record.category, record.style, record.theme,
-    record.size, record.format, record.transparent_bg, record.icon,
-  ].join(" ");
+  // output_key mirrors the server's real row identity (the output file
+  // path a generation wrote to, not its settings — see app/web/history.py).
+  // A settings tuple here would go stale the moment any of those fields
+  // changes server-side between paged /api/history fetches, letting an
+  // upsert-reordered row slip past dedup as a duplicate tile.
+  return record.output_key;
 }
 
 function _galleryTile(record, num) {

@@ -309,6 +309,12 @@ def test_migration_collapses_pre_existing_duplicates_and_rebuilds_the_index(
     duplicate the reported bug produces: two rows, one file on disk. Opening
     a GalleryStore on it must migrate to one row -- the newest -- under a
     working output_key unique index.
+
+    The newer `created_at` is deliberately put on the row inserted FIRST
+    (lower id), and the older `created_at` on the row inserted SECOND
+    (higher id). That way "keep newest by created_at" and "keep highest id"
+    disagree, so the test actually exercises the `created_at DESC, id DESC`
+    ordering rather than passing by coincidence if it fell back to id alone.
     """
     output_dir = tmp_path / "output"
     output_dir.mkdir()
@@ -320,17 +326,17 @@ def test_migration_collapses_pre_existing_duplicates_and_rebuilds_the_index(
     conn.execute(
         _OLD_INSERT,
         (
-            "2024-01-01T00:00:00+00:00", "Nextcloud", "server", "minimal", "blue",
-            256, "svg", 0, "auto", "nextcloud", "Nextcloud", "simple-icons",
-            "catalog", 0, json.dumps(files_rel), files_rel["svg"],
+            "2024-01-02T00:00:00+00:00", "Nextcloud", "server", "minimal", "blue",
+            256, "svg", 0, "generic", "generic-server", None, None,
+            "fallback", 1, json.dumps(files_rel), files_rel["svg"],
         ),
     )
     conn.execute(
         _OLD_INSERT,
         (
-            "2024-01-02T00:00:00+00:00", "Nextcloud", "server", "minimal", "blue",
-            256, "svg", 0, "generic", "generic-server", None, None,
-            "fallback", 1, json.dumps(files_rel), files_rel["svg"],
+            "2024-01-01T00:00:00+00:00", "Nextcloud", "server", "minimal", "blue",
+            256, "svg", 0, "auto", "nextcloud", "Nextcloud", "simple-icons",
+            "catalog", 0, json.dumps(files_rel), files_rel["svg"],
         ),
     )
     conn.commit()
@@ -373,6 +379,69 @@ def test_migration_collapses_pre_existing_duplicates_and_rebuilds_the_index(
                     "server/nextcloud",
                 ),
             )
+    finally:
+        gallery.close()
+
+
+def test_interrupted_migration_recovers_instead_of_deleting_rows(tmp_path: Path) -> None:
+    """Regression for a specific failure mode: `ALTER TABLE ... ADD COLUMN`
+    commits independently of the backfill `UPDATE`s under SQLite's DDL
+    autocommit (Python's sqlite3 doesn't open an implicit transaction until
+    the first DML statement). A process killed between the ALTER and the
+    backfill commit leaves `output_key` present but NULL on every row.
+
+    If backfill were gated on "column doesn't exist yet", the next open
+    would see the column, skip backfilling entirely, and the
+    unkeyable-row cleanup would then delete every legacy row -- 2 valid
+    rows in, 0 rows out, files still on disk. Backfill must instead be
+    unconditional (scoped to rows still missing a key) so this resumes
+    instead of destroying data.
+    """
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    db_path = output_dir / ".gallery.db"
+    files_a = {"svg": "svg/server/alpha.svg"}
+    files_b = {"svg": "svg/server/beta.svg"}
+
+    conn = sqlite3.connect(db_path)
+    conn.executescript(_OLD_SCHEMA)
+    conn.execute(
+        _OLD_INSERT,
+        (
+            "2024-01-01T00:00:00+00:00", "Alpha", "server", "minimal", "blue",
+            256, "svg", 0, "auto", "alpha", "Alpha", "simple-icons",
+            "catalog", 0, json.dumps(files_a), files_a["svg"],
+        ),
+    )
+    conn.execute(
+        _OLD_INSERT,
+        (
+            "2024-01-02T00:00:00+00:00", "Beta", "server", "minimal", "blue",
+            256, "svg", 0, "auto", "beta", "Beta", "simple-icons",
+            "catalog", 0, json.dumps(files_b), files_b["svg"],
+        ),
+    )
+    conn.commit()
+
+    # Simulate the interruption: the column lands (DDL autocommit) but the
+    # backfill never runs, so every row is left with output_key = NULL.
+    conn.execute("ALTER TABLE generations ADD COLUMN output_key TEXT")
+    conn.commit()
+    conn.close()
+
+    _touch(output_dir, "/output/svg/server/alpha.svg")
+    _touch(output_dir, "/output/svg/server/beta.svg")
+
+    gallery = GalleryStore(db_path, output_dir)
+    try:
+        items = gallery.recent()
+
+        assert len(items) == 2, "an interrupted migration must not delete legacy rows"
+        assert {item["name"] for item in items} == {"Alpha", "Beta"}
+        assert {item["output_key"] for item in items} == {
+            "server/alpha",
+            "server/beta",
+        }
     finally:
         gallery.close()
 

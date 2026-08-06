@@ -85,9 +85,15 @@ def _derive_output_key(files: dict[str, str]) -> str | None:
     """Derive the shared output key from any one entry in a files mapping.
 
     Every format written by a single generation shares the same base path,
-    so the first usable entry is sufficient.
+    so the first usable entry is sufficient. Non-string entries (a tampered
+    or hand-edited DB) are skipped rather than raising — this must stay a
+    plain "couldn't find a key" result so the caller's corruption handling
+    (sqlite3.DatabaseError, in _connect) still applies; a stray TypeError
+    here would instead crash the gallery outright.
     """
     for rel in files.values():
+        if not isinstance(rel, str):
+            continue
         key = _output_key_from_rel(rel)
         if key:
             return key
@@ -143,28 +149,48 @@ class GalleryStore:
         Idempotent and safe on a brand-new empty database: every step is a
         no-op there (column already present, no old index, no duplicate
         rows to collapse).
+
+        The "add column" and "backfill values" steps are deliberately
+        decoupled rather than gated together behind one `if "output_key"
+        not in columns` check. `ALTER TABLE` takes effect immediately under
+        SQLite's DDL autocommit — Python's sqlite3 module doesn't open an
+        implicit transaction until the first DML statement — so a process
+        interrupted between the ALTER and the backfill commit leaves a
+        database with the column present but every value NULL. If backfill
+        were gated on "column absent", the next open would see the column,
+        skip backfilling, and the unkeyable-row cleanup below would then
+        delete every legacy row. Instead the backfill runs unconditionally,
+        scoped to whatever rows still need it, so an interrupted migration
+        just resumes on the next open instead of destroying data.
         """
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(generations)")}
         if "output_key" not in columns:
             conn.execute("ALTER TABLE generations ADD COLUMN output_key TEXT")
-            for row in conn.execute("SELECT id, files FROM generations").fetchall():
-                try:
-                    files = json.loads(row["files"])
-                except (json.JSONDecodeError, TypeError):
-                    files = {}
-                key = _derive_output_key(files) if isinstance(files, dict) else None
+            conn.commit()
+
+        for row in conn.execute(
+            "SELECT id, files FROM generations WHERE output_key IS NULL OR output_key = ''"
+        ).fetchall():
+            try:
+                files = json.loads(row["files"])
+            except (json.JSONDecodeError, TypeError):
+                files = {}
+            key = _derive_output_key(files) if isinstance(files, dict) else None
+            if key:
                 conn.execute(
                     "UPDATE generations SET output_key = ? WHERE id = ?", (key, row["id"])
                 )
+        conn.commit()
 
         # Superseded by the output_key index below; old databases still
         # carry it and it would otherwise conflict with legitimate updates
         # (same output_key, different name/format/icon/etc).
         conn.execute("DROP INDEX IF EXISTS idx_generations_identity")
 
-        # Rows whose files couldn't yield a key (corrupt/empty) reference
-        # nothing usable and would break the NOT NULL-equivalent uniqueness
-        # constraint below — drop them rather than leave them unmigratable.
+        # Rows still unkeyed after a real backfill attempt above are
+        # genuinely unkeyable (corrupt/empty files) and would break the
+        # NOT NULL-equivalent uniqueness constraint below — drop them
+        # rather than leave them unmigratable.
         conn.execute("DELETE FROM generations WHERE output_key IS NULL OR output_key = ''")
 
         # Collapse rows that collide under the real (output_key) identity,
