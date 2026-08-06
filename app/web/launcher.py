@@ -21,6 +21,7 @@ from app.web import api
 DEFAULT_PORT = 5000
 HOST = "127.0.0.1"
 WATCHDOG_INTERVAL = 2.0
+STARTUP_TIMEOUT = 30.0
 
 
 def find_free_port(preferred: int, attempts: int = 20) -> int:
@@ -46,7 +47,7 @@ def probe_existing(port: int, timeout: float = 0.5) -> bool:
             body = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError):
         return False
-    return body.get("service") == api.ALIVE_MARKER
+    return isinstance(body, dict) and body.get("service") == api.ALIVE_MARKER
 
 
 def _watch(server: uvicorn.Server) -> None:
@@ -76,7 +77,12 @@ def run() -> int:
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
 
+    deadline = time.monotonic() + STARTUP_TIMEOUT
     while not server.started and thread.is_alive():
+        if time.monotonic() > deadline:
+            server.should_exit = True
+            print(f"Server did not start within {STARTUP_TIMEOUT:.0f}s on port {port}")
+            return 1
         time.sleep(0.05)
     if not thread.is_alive():
         print("Server failed to start")

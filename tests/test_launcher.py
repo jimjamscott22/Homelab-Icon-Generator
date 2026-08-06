@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import socket
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.web import api, launcher
@@ -40,6 +39,31 @@ def test_probe_rejects_a_foreign_service(monkeypatch) -> None:
         launcher.urllib.request,
         "urlopen",
         lambda *a, **k: (_ for _ in ()).throw(OSError("connection refused")),
+    )
+
+    assert launcher.probe_existing(5000, timeout=0.2) is False
+
+
+def test_probe_rejects_a_non_dict_json_body(monkeypatch) -> None:
+    """A foreign service can return valid JSON that isn't an object (e.g. a
+    top-level array). probe_existing must treat that as "not ours" rather
+    than raising AttributeError from body.get(...).
+    """
+
+    class _StubResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+        def read(self):
+            return b"[1, 2, 3]"
+
+    monkeypatch.setattr(
+        launcher.urllib.request,
+        "urlopen",
+        lambda *a, **k: _StubResponse(),
     )
 
     assert launcher.probe_existing(5000, timeout=0.2) is False
