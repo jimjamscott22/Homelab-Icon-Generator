@@ -64,18 +64,29 @@ def test_record_round_trips_settings(store) -> None:
     assert items[0]["thumb"] == "/output/svg/server/nextcloud.svg"
 
 
-def test_identical_settings_update_in_place_instead_of_duplicating(store) -> None:
+def test_identical_settings_update_in_place_instead_of_duplicating(
+    store, monkeypatch: pytest.MonkeyPatch
+) -> None:
     gallery, output_dir = store
     payload = _payload()
     _touch(output_dir, payload["files"]["svg"])
     gallery.record(payload)
     first = gallery.recent()[0]["created_at"]
+
+    import app.web.history as history_module
+
+    class _LaterDatetime(history_module.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return super().now(tz) + history_module.timedelta(days=1)
+
+    monkeypatch.setattr(history_module, "datetime", _LaterDatetime)
     gallery.record(payload)
 
     items = gallery.recent()
 
     assert len(items) == 1
-    assert items[0]["created_at"] >= first
+    assert items[0]["created_at"] > first
 
 
 def test_differing_settings_create_separate_rows(store) -> None:

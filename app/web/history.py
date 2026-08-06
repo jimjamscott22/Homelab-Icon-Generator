@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 MAX_ROWS = 500
@@ -91,12 +91,18 @@ class GalleryStore:
             bad = self._db_path.with_suffix(self._db_path.suffix + ".bad")
             bad.unlink(missing_ok=True)
             self._db_path.replace(bad)
-            conn = sqlite3.connect(self._db_path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.executescript(_SCHEMA)
-            conn.commit()
-            return conn
+            conn = None
+            try:
+                conn = sqlite3.connect(self._db_path, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.executescript(_SCHEMA)
+                conn.commit()
+                return conn
+            except Exception:
+                if conn is not None:
+                    conn.close()
+                raise
 
     def close(self) -> None:
         with self._lock:
@@ -145,27 +151,26 @@ class GalleryStore:
             )
             self._conn.commit()
 
-    def _reconcile(self) -> None:
-        """Drop rows whose files have all been deleted from disk."""
-        with self._lock:
-            rows = self._conn.execute("SELECT id, files FROM generations").fetchall()
-            dead = [
-                row["id"]
-                for row in rows
-                if not any(
-                    (self._output_dir / rel).is_file()
-                    for rel in json.loads(row["files"]).values()
-                )
-            ]
-            if dead:
-                self._conn.executemany(
-                    "DELETE FROM generations WHERE id = ?", [(i,) for i in dead]
-                )
-                self._conn.commit()
+    def _reconcile_locked(self) -> None:
+        """Drop rows whose files have all been deleted. Caller holds the lock."""
+        rows = self._conn.execute("SELECT id, files FROM generations").fetchall()
+        dead = [
+            row["id"]
+            for row in rows
+            if not any(
+                (self._output_dir / rel).is_file()
+                for rel in json.loads(row["files"]).values()
+            )
+        ]
+        if dead:
+            self._conn.executemany(
+                "DELETE FROM generations WHERE id = ?", [(i,) for i in dead]
+            )
+            self._conn.commit()
 
     def recent(self, limit: int = 50, offset: int = 0) -> list[dict]:
-        self._reconcile()
         with self._lock:
+            self._reconcile_locked()
             rows = self._conn.execute(
                 "SELECT * FROM generations "
                 "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
