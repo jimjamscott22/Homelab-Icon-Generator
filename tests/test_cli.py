@@ -7,6 +7,8 @@ import sys
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 import app.main as cli
 
 
@@ -54,3 +56,43 @@ def test_batch_entry_passes_icon_to_generator(monkeypatch, tmp_path: Path) -> No
     cli.run_batch(str(batch), str(tmp_path))
 
     assert captured[0].icon == "nextcloud"
+
+
+def test_bare_invocation_opens_the_web_ui(monkeypatch) -> None:
+    import app.main
+
+    calls = []
+    monkeypatch.setattr(sys, "argv", ["homelab-icons"])
+    monkeypatch.setattr(
+        "app.web.launcher.run", lambda: calls.append("launched") or 0
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        app.main.main()
+
+    assert calls == ["launched"]
+    assert excinfo.value.code == 0
+
+
+def test_flagged_invocation_still_runs_the_cli(monkeypatch, tmp_path) -> None:
+    import app.main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "homelab-icons",
+            "--name", "Nextcloud",
+            "--category", "cloud_service",
+            "--format", "svg",
+            "--output-dir", str(tmp_path),
+        ],
+    )
+    monkeypatch.setattr(
+        "app.web.launcher.run",
+        lambda: pytest.fail("CLI invocation must not start the web server"),
+    )
+
+    app.main.main()
+
+    assert list(tmp_path.rglob("*.svg"))
