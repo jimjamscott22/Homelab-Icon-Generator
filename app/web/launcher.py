@@ -24,16 +24,27 @@ WATCHDOG_INTERVAL = 2.0
 STARTUP_TIMEOUT = 30.0
 
 
+def _can_bind(port: int) -> bool:
+    """True if `port` is currently free to bind on HOST.
+
+    Plain bind, deliberately no SO_REUSEADDR: on Windows that option permits
+    binding a port that's already bound by another socket, which would make
+    this always report "free" and silently break both callers below.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind((HOST, port))
+            return True
+        except OSError:
+            return False
+
+
 def find_free_port(preferred: int, attempts: int = 20) -> int:
     """Return the first bindable port at or above `preferred`."""
     for offset in range(attempts):
         candidate = preferred + offset
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try:
-                sock.bind((HOST, candidate))
-                return candidate
-            except OSError:
-                continue
+        if _can_bind(candidate):
+            return candidate
     raise RuntimeError(
         f"no free port in {preferred}-{preferred + attempts - 1} on {HOST}"
     )
@@ -55,9 +66,21 @@ def find_existing(preferred: int, attempts: int = 20, timeout: float = 0.5) -> i
     OUR server. A relaunch must find an instance that fell back to a
     non-preferred port, not just probe the preferred one and start a
     silent second instance.
+
+    Each candidate is bind-tested (instant — a local syscall) before it is
+    ever HTTP-probed (up to `timeout` seconds — a network round trip that,
+    on an unbound loopback port behind a firewall dropping the SYN, can burn
+    the full timeout rather than failing fast). `find_free_port` always
+    returns the *lowest* bindable port in the range, so the moment a
+    candidate here binds successfully, nothing of ours can be running at or
+    above it — our own instance would have claimed that port instead. That
+    lets a cold launch (nothing running yet) return after a single instant
+    bind check, with no HTTP request at all.
     """
     for offset in range(attempts):
         candidate = preferred + offset
+        if _can_bind(candidate):
+            return None
         if probe_existing(candidate, timeout=timeout):
             return candidate
     return None

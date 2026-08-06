@@ -2,11 +2,33 @@
 
 from __future__ import annotations
 
+import contextlib
 import socket
 
 from fastapi.testclient import TestClient
 
 from app.web import api, launcher
+
+
+def _free_port() -> int:
+    """An ephemeral port that is free at the moment this returns."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((launcher.HOST, 0))
+        return probe.getsockname()[1]
+
+
+@contextlib.contextmanager
+def _hold_ports(*ports: int):
+    """Keep real listening sockets open on `ports` for the duration of the
+    block, so `_can_bind` genuinely reports them as occupied — a bind-gated
+    scan must reach the HTTP probe for these ports rather than short-circuit.
+    """
+    with contextlib.ExitStack() as stack:
+        for port in ports:
+            sock = stack.enter_context(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+            sock.bind((launcher.HOST, port))
+            sock.listen(1)
+        yield
 
 
 def test_find_free_port_returns_preferred_when_available() -> None:
@@ -98,8 +120,14 @@ def test_find_existing_scans_the_whole_range_find_free_port_would_try(monkeypatc
     foreign service but our server fell back to a higher port in the same
     range find_free_port would scan, find_existing must locate it instead of
     reporting no existing instance (which would start a silent duplicate).
+
+    The bind gate in front of the HTTP probe means a candidate is only ever
+    probed if something is genuinely listening there — so the candidates
+    below `our_port` must be real, held sockets, not just a monkeypatched
+    probe_existing, or the scan would short-circuit on the first (free) port
+    before ever reaching the fake.
     """
-    preferred = 5000
+    preferred = _free_port()
     our_port = preferred + 3
 
     def fake_probe(port: int, timeout: float = 0.5) -> bool:
@@ -107,13 +135,44 @@ def test_find_existing_scans_the_whole_range_find_free_port_would_try(monkeypatc
 
     monkeypatch.setattr(launcher, "probe_existing", fake_probe)
 
-    assert launcher.find_existing(preferred) == our_port
+    with _hold_ports(preferred, preferred + 1, preferred + 2, our_port):
+        assert launcher.find_existing(preferred) == our_port
 
 
-def test_find_existing_returns_none_when_nothing_answers(monkeypatch) -> None:
+def test_find_existing_returns_none_when_every_candidate_is_foreign(monkeypatch) -> None:
+    """All candidates in range are occupied (bind fails on each, so each is
+    HTTP-probed) but none answer with our marker — find_existing must fall
+    through to None rather than adopting a foreign service.
+    """
+    preferred = _free_port()
+
     monkeypatch.setattr(launcher, "probe_existing", lambda port, timeout=0.5: False)
 
-    assert launcher.find_existing(5000, attempts=5) is None
+    with _hold_ports(*(preferred + offset for offset in range(5))):
+        assert launcher.find_existing(preferred, attempts=5) is None
+
+
+def test_find_existing_does_not_probe_over_the_network_when_the_port_is_free(
+    monkeypatch,
+) -> None:
+    """Regression: the HTTP probe must be gated behind an instant bind()
+    check. A free preferred port (the ordinary cold-launch case — nothing
+    running yet) must be detected by the bind check alone; issuing an HTTP
+    request at all here means a Windows loopback port that silently drops
+    the SYN would burn a full probe timeout per candidate before uvicorn
+    even starts. Assert on the absence of the call rather than timing it,
+    which would be flaky.
+    """
+    preferred = _free_port()
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError(
+            "find_existing must not issue an HTTP request when the port is free"
+        )
+
+    monkeypatch.setattr(launcher.urllib.request, "urlopen", _fail_if_called)
+
+    assert launcher.find_existing(preferred) is None
 
 
 def test_alive_probe_identifies_this_service() -> None:
