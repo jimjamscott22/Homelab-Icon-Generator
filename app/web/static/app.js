@@ -14,7 +14,6 @@ const state = {
   icon: "auto",
   iconTitle: null,
   iconSource: null,
-  recent: [],
   builds: 0,
 };
 let _cliText = "";
@@ -430,82 +429,10 @@ function onBuildSuccess(data) {
     dl.append(a);
   });
 
-  // recent strip
-  state.recent.unshift({
-    name: data.name,
-    category: data.category,
-    style: data.style,
-    theme: data.theme,
-    size: data.size,
-    url: previewUrl,
-  });
-  state.recent = state.recent.slice(0, 10);
-  renderRecent();
+  // gallery (server-backed)
+  Gallery.refresh();
 
   log(`<span class="ok">[OK]</span> built ${escapeHtml(data.name)} in ${data.elapsed_ms}ms`, "ok");
-}
-
-function _makeSlot(r, num) {
-  const slot = el("div", {
-    class: "slot filled",
-    title: `${r.name} — ${r.style}/${r.theme}/${r.size}`,
-  });
-  slot.addEventListener("click", () => {
-    const artifact = $("artifact");
-    artifact.innerHTML = "";
-    artifact.append(el("img", { src: r.url, alt: r.name }));
-    $("artifactName").textContent = r.name.toUpperCase();
-  });
-  slot.append(
-    el("span", { class: "num" }, String(num).padStart(2, "0")),
-    el("img", { src: r.url, alt: r.name, loading: "lazy" }),
-    el("span", { class: "lbl" }, r.name),
-  );
-  return slot;
-}
-
-function renderRecent() {
-  const strip = $("strip");
-
-  if (state.recent.length === 0) {
-    strip.innerHTML = "";
-    strip.append(el("div", { class: "empty" }, "NO RECENT ARTIFACTS / GENERATE TO POPULATE"));
-    return;
-  }
-
-  strip.querySelector(".empty")?.remove();
-
-  const filledBefore = strip.querySelectorAll(".slot.filled");
-
-  if (filledBefore.length === 0) {
-    // First build: create all slots from scratch
-    state.recent.forEach((r, i) => {
-      strip.append(_makeSlot(r, state.recent.length - i));
-    });
-  } else {
-    // Subsequent builds: prepend new slot, reuse existing image nodes
-    strip.insertBefore(
-      _makeSlot(state.recent[0], state.recent.length),
-      strip.querySelector(".slot.filled"),
-    );
-    // Trim last slot when at the 10-item cap
-    const filled = strip.querySelectorAll(".slot.filled");
-    for (let i = state.recent.length; i < filled.length; i++) {
-      filled[i].remove();
-    }
-    // At cap every existing slot shifts down by one position, so renumber
-    if (state.recent.length === 10) {
-      strip.querySelectorAll(".slot.filled .num").forEach((numEl, i) => {
-        numEl.textContent = String(10 - i).padStart(2, "0");
-      });
-    }
-  }
-
-  // Sync empty padding slots to keep a minimum of 6 visible
-  strip.querySelectorAll(".slot:not(.filled)").forEach(s => s.remove());
-  for (let i = 0; i < Math.max(0, 6 - state.recent.length); i++) {
-    strip.append(el("div", { class: "slot" }));
-  }
 }
 
 /* ============ INIT ============ */

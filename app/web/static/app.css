@@ -1083,3 +1083,24 @@ footer .right b {
   footer .right { justify-content: center; }
   footer .right { flex-wrap: wrap; }
 }
+
+/* ---- gallery ---- */
+.strip .slot.filled { cursor: pointer; }
+.strip .slot.filled:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.gallery-more {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: .75rem;
+  padding: .4rem .8rem;
+  font: inherit;
+  font-size: .7rem;
+  letter-spacing: .08em;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  cursor: pointer;
+}
+.gallery-more:hover { filter: brightness(1.4); }
