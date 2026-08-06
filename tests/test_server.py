@@ -102,3 +102,27 @@ def test_page_has_accessible_override_controls_and_no_external_fonts(client) -> 
     assert 'data-icon-key="generic"' in page
     assert 'aria-live="polite"' in page
     assert "fonts.googleapis.com" not in page
+
+
+def test_generate_with_empty_body_is_a_client_error(client) -> None:
+    response = client.post("/api/generate")
+
+    assert response.status_code == 400
+    assert "error" in response.json()
+
+
+def test_search_with_non_integer_limit_is_a_client_error(client) -> None:
+    response = client.get("/api/icons/search?q=Nextcloud&limit=abc")
+
+    assert response.status_code == 400
+    assert response.json()["error"] == "limit must be an integer"
+
+
+def test_generate_with_non_integer_size_is_a_client_error(client) -> None:
+    response = client.post(
+        "/api/generate",
+        json={"name": "Nextcloud", "category": "cloud_service", "size": "abc"},
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.json()

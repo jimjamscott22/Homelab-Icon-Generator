@@ -53,8 +53,13 @@ def _allow_request() -> bool:
 
 @app.exception_handler(RequestValidationError)
 def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Normalise FastAPI's 422 body to the {"error": ...} shape the UI parses."""
-    return JSONResponse({"error": "malformed request body"}, status_code=422)
+    """Match Flask: malformed input is a 400 with an {"error": ...} body.
+
+    FastAPI defaults to 422, but the previous server returned 400 for a bad
+    `size` value, a bad `limit`, and an unparseable body alike. Status codes
+    stay byte-identical; only some message text differs.
+    """
+    return JSONResponse({"error": "malformed request body"}, status_code=400)
 
 
 @app.get("/")
@@ -90,9 +95,14 @@ def _icon_payload(icon: VectorIcon) -> dict[str, str | None]:
 
 
 @app.get("/api/icons/search")
-def search_icons(q: str = "", limit: int = 8):
+def search_icons(q: str = "", limit: str = "8"):
     query = q.strip()
-    limit = max(1, min(limit, 20))
+    # Parsed by hand so a bad value keeps Flask's exact 400 message.
+    try:
+        count = int(limit)
+    except ValueError:
+        return JSONResponse({"error": "limit must be an integer"}, status_code=400)
+    count = max(1, min(count, 20))
     if not query:
         return {"exact": None, "items": [], "query": query}
 
@@ -100,7 +110,7 @@ def search_icons(q: str = "", limit: int = 8):
     exact = resolver.exact(query)
     return {
         "exact": _icon_payload(exact) if exact is not None else None,
-        "items": [_icon_payload(icon) for icon in resolver.suggest(query, limit=limit)],
+        "items": [_icon_payload(icon) for icon in resolver.suggest(query, limit=count)],
         "query": query,
     }
 
