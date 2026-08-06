@@ -139,6 +139,47 @@ def test_repeat_generation_does_not_duplicate_history(client) -> None:
     assert len(client.get("/api/history").json()["items"]) == 1
 
 
+def test_generation_survives_a_failing_gallery(client, monkeypatch) -> None:
+    class _ExplodingGallery:
+        def record(self, payload: dict) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(api, "get_gallery", lambda: _ExplodingGallery())
+
+    response = client.post(
+        "/api/generate",
+        json={"name": "Nextcloud", "category": "cloud_service", "format": "svg"},
+    )
+    data = response.json()
+
+    assert response.status_code == 200
+    assert set(data["files"]) == {"svg"}
+    assert data["icon_key"] == "nextcloud"
+
+
+def test_generation_survives_no_gallery_at_all(client, monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_gallery", lambda: None)
+
+    response = client.post(
+        "/api/generate",
+        json={"name": "Nextcloud", "category": "cloud_service", "format": "svg"},
+    )
+    data = response.json()
+
+    assert response.status_code == 200
+    assert set(data["files"]) == {"svg"}
+    assert data["icon_key"] == "nextcloud"
+
+
+def test_history_degrades_to_empty_when_gallery_unavailable(client, monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_gallery", lambda: None)
+
+    response = client.get("/api/history")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+
+
 def test_search_with_non_integer_limit_is_a_client_error(client) -> None:
     response = client.get("/api/icons/search?q=Nextcloud&limit=abc")
 
