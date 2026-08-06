@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from pathlib import Path
 
 import uvicorn
 
@@ -22,6 +23,7 @@ DEFAULT_PORT = 5000
 HOST = "127.0.0.1"
 WATCHDOG_INTERVAL = 2.0
 STARTUP_TIMEOUT = 30.0
+INSTANCE_FILENAME = ".instance"
 
 
 def _can_bind(port: int) -> bool:
@@ -29,7 +31,7 @@ def _can_bind(port: int) -> bool:
 
     Plain bind, deliberately no SO_REUSEADDR: on Windows that option permits
     binding a port that's already bound by another socket, which would make
-    this always report "free" and silently break both callers below.
+    this always report "free" and silently break `find_free_port`.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
@@ -61,29 +63,56 @@ def probe_existing(port: int, timeout: float = 0.5) -> bool:
     return isinstance(body, dict) and body.get("service") == api.ALIVE_MARKER
 
 
-def find_existing(preferred: int, attempts: int = 20, timeout: float = 0.5) -> int | None:
-    """Scan the same candidate range `find_free_port` would try, looking for
-    OUR server. A relaunch must find an instance that fell back to a
-    non-preferred port, not just probe the preferred one and start a
-    silent second instance.
-
-    Each candidate is bind-tested (instant — a local syscall) before it is
-    ever HTTP-probed (up to `timeout` seconds — a network round trip that,
-    on an unbound loopback port behind a firewall dropping the SYN, can burn
-    the full timeout rather than failing fast). `find_free_port` always
-    returns the *lowest* bindable port in the range, so the moment a
-    candidate here binds successfully, nothing of ours can be running at or
-    above it — our own instance would have claimed that port instead. That
-    lets a cold launch (nothing running yet) return after a single instant
-    bind check, with no HTTP request at all.
+def _instance_file() -> Path:
+    """Path to the instance marker, scoped to OUTPUT_DIR deliberately: the
+    thing being protected is two servers sharing one gallery database, and
+    the gallery lives in OUTPUT_DIR. Two launches from different working
+    directories have different output dirs and different galleries, so they
+    legitimately run side by side — that's correct, not a bug to prevent.
     """
-    for offset in range(attempts):
-        candidate = preferred + offset
-        if _can_bind(candidate):
-            return None
-        if probe_existing(candidate, timeout=timeout):
-            return candidate
-    return None
+    return api.OUTPUT_DIR / INSTANCE_FILENAME
+
+
+def write_instance_file(port: int) -> None:
+    """Record the bound port so a relaunch can find this instance directly
+    instead of guessing where it is. Call only after startup is confirmed —
+    a file naming a port nothing is listening on is worse than no file.
+    """
+    _instance_file().write_text(str(port), encoding="utf-8")
+
+
+def remove_instance_file() -> None:
+    """Clean up on graceful shutdown. Best-effort: a leftover file from a
+    crash is already handled safely by find_existing's marker check, so a
+    failure to remove it here must not be fatal.
+    """
+    try:
+        _instance_file().unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def find_existing(timeout: float = 0.5) -> int | None:
+    """Return the port of an already-running instance for this OUTPUT_DIR,
+    if any.
+
+    Reads the port a previous successful startup recorded and probes
+    exactly that one port — one file read, one HTTP request, always
+    correct, unlike scanning a candidate range (which is either slow if it
+    HTTP-probes ports nothing is listening on, or unsound if it tries to
+    infer "nothing of ours is running" from bind() results alone: a port
+    freed by an unrelated process after our instance started elsewhere in
+    the range would be misread as proof no instance exists).
+
+    The file's contents are never trusted on their own — missing, corrupt,
+    or naming a port that's now silent or answering a foreign service all
+    resolve to None, and the caller starts a fresh instance.
+    """
+    try:
+        port = int(_instance_file().read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    return port if probe_existing(port, timeout=timeout) else None
 
 
 def _watch(server: uvicorn.Server) -> None:
@@ -98,7 +127,7 @@ def _watch(server: uvicorn.Server) -> None:
 def run() -> int:
     preferred = int(os.environ.get("PORT", DEFAULT_PORT))
 
-    existing_port = find_existing(preferred)
+    existing_port = find_existing()
     if existing_port is not None:
         url = f"http://{HOST}:{existing_port}/"
         print(f"Homelab Icon Generator already running — opening {url}")
@@ -125,6 +154,8 @@ def run() -> int:
         print("Server failed to start")
         return 1
 
+    write_instance_file(port)
+
     print(f"Homelab Icon Generator running at {url}")
     try:
         webbrowser.open(url)
@@ -140,4 +171,6 @@ def run() -> int:
     except KeyboardInterrupt:
         server.should_exit = True
         thread.join(timeout=5)
+    finally:
+        remove_instance_file()
     return 0

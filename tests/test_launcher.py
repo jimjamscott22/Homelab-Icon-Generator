@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import socket
 
 from fastapi.testclient import TestClient
@@ -15,20 +14,6 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.bind((launcher.HOST, 0))
         return probe.getsockname()[1]
-
-
-@contextlib.contextmanager
-def _hold_ports(*ports: int):
-    """Keep real listening sockets open on `ports` for the duration of the
-    block, so `_can_bind` genuinely reports them as occupied — a bind-gated
-    scan must reach the HTTP probe for these ports rather than short-circuit.
-    """
-    with contextlib.ExitStack() as stack:
-        for port in ports:
-            sock = stack.enter_context(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
-            sock.bind((launcher.HOST, port))
-            sock.listen(1)
-        yield
 
 
 def test_find_free_port_returns_preferred_when_available() -> None:
@@ -115,64 +100,119 @@ def test_probe_rejects_a_foreign_service_with_a_mismatched_marker(monkeypatch) -
     assert launcher.probe_existing(5000, timeout=0.2) is False
 
 
-def test_find_existing_scans_the_whole_range_find_free_port_would_try(monkeypatch) -> None:
-    """A relaunch must not stop at the preferred port: if it's held by a
-    foreign service but our server fell back to a higher port in the same
-    range find_free_port would scan, find_existing must locate it instead of
-    reporting no existing instance (which would start a silent duplicate).
-
-    The bind gate in front of the HTTP probe means a candidate is only ever
-    probed if something is genuinely listening there — so the candidates
-    below `our_port` must be real, held sockets, not just a monkeypatched
-    probe_existing, or the scan would short-circuit on the first (free) port
-    before ever reaching the fake.
-    """
-    preferred = _free_port()
-    our_port = preferred + 3
-
-    def fake_probe(port: int, timeout: float = 0.5) -> bool:
-        return port == our_port
-
-    monkeypatch.setattr(launcher, "probe_existing", fake_probe)
-
-    with _hold_ports(preferred, preferred + 1, preferred + 2, our_port):
-        assert launcher.find_existing(preferred) == our_port
-
-
-def test_find_existing_returns_none_when_every_candidate_is_foreign(monkeypatch) -> None:
-    """All candidates in range are occupied (bind fails on each, so each is
-    HTTP-probed) but none answer with our marker — find_existing must fall
-    through to None rather than adopting a foreign service.
-    """
-    preferred = _free_port()
-
-    monkeypatch.setattr(launcher, "probe_existing", lambda port, timeout=0.5: False)
-
-    with _hold_ports(*(preferred + offset for offset in range(5))):
-        assert launcher.find_existing(preferred, attempts=5) is None
-
-
-def test_find_existing_does_not_probe_over_the_network_when_the_port_is_free(
-    monkeypatch,
+def test_find_existing_returns_none_and_probes_nothing_when_no_instance_file(
+    tmp_path, monkeypatch
 ) -> None:
-    """Regression: the HTTP probe must be gated behind an instant bind()
-    check. A free preferred port (the ordinary cold-launch case — nothing
-    running yet) must be detected by the bind check alone; issuing an HTTP
-    request at all here means a Windows loopback port that silently drops
-    the SYN would burn a full probe timeout per candidate before uvicorn
-    even starts. Assert on the absence of the call rather than timing it,
-    which would be flaky.
+    """The ordinary cold-launch case: nothing has ever started here, so no
+    `.instance` file exists. find_existing must report None without issuing
+    any HTTP request — that's the case that matters most, since it's the
+    common path every double-click launch takes.
     """
-    preferred = _free_port()
+    monkeypatch.setattr(api, "OUTPUT_DIR", tmp_path / "output")
 
     def _fail_if_called(*args, **kwargs):
         raise AssertionError(
-            "find_existing must not issue an HTTP request when the port is free"
+            "find_existing must not issue an HTTP request when no instance file exists"
         )
 
     monkeypatch.setattr(launcher.urllib.request, "urlopen", _fail_if_called)
 
-    assert launcher.find_existing(preferred) is None
+    assert launcher.find_existing() is None
+
+
+def test_find_existing_returns_the_recorded_port_when_our_marker_answers(
+    tmp_path, monkeypatch
+) -> None:
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(api, "OUTPUT_DIR", output_dir)
+    (output_dir / launcher.INSTANCE_FILENAME).write_text("5001", encoding="utf-8")
+    monkeypatch.setattr(launcher, "probe_existing", lambda port, timeout=0.5: port == 5001)
+
+    assert launcher.find_existing() == 5001
+
+
+def test_find_existing_returns_none_when_the_recorded_port_is_a_foreign_service(
+    tmp_path, monkeypatch
+) -> None:
+    """A stale instance file can point at a port a foreign service has since
+    taken over. The file's contents must never be trusted without the
+    marker check confirming it's really us.
+    """
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(api, "OUTPUT_DIR", output_dir)
+    (output_dir / launcher.INSTANCE_FILENAME).write_text("5001", encoding="utf-8")
+    monkeypatch.setattr(launcher, "probe_existing", lambda port, timeout=0.5: False)
+
+    assert launcher.find_existing() is None
+
+
+def test_find_existing_returns_none_when_the_recorded_port_is_silent(tmp_path, monkeypatch) -> None:
+    """A stale instance file can point at a port nothing listens on anymore
+    (the process exited without cleanup). Must resolve to None promptly,
+    no hang.
+    """
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(api, "OUTPUT_DIR", output_dir)
+    closed = _free_port()
+    (output_dir / launcher.INSTANCE_FILENAME).write_text(str(closed), encoding="utf-8")
+
+    assert launcher.find_existing(timeout=0.2) is None
+
+
+def test_find_existing_returns_none_for_garbage_file_contents(tmp_path, monkeypatch) -> None:
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(api, "OUTPUT_DIR", output_dir)
+    (output_dir / launcher.INSTANCE_FILENAME).write_text("not-a-port\x00garbage", encoding="utf-8")
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("an unparseable instance file must never reach the HTTP probe")
+
+    monkeypatch.setattr(launcher.urllib.request, "urlopen", _fail_if_called)
+
+    assert launcher.find_existing() is None
+
+
+def test_write_instance_file_round_trips_with_find_existing(tmp_path, monkeypatch) -> None:
+    """write_instance_file and find_existing must agree on where the port
+    lives and what the alive URL looks like — a sanity check that the write
+    path and read path are talking about the same file and the same port,
+    with only the network transport itself stubbed.
+    """
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(api, "OUTPUT_DIR", output_dir)
+
+    port = _free_port()
+
+    class _AliveResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+        def read(self):
+            return b'{"service": "' + api.ALIVE_MARKER.encode() + b'"}'
+
+    def fake_urlopen(url, timeout=0.5):
+        assert url == f"http://{launcher.HOST}:{port}/api/alive"
+        return _AliveResponse()
+
+    monkeypatch.setattr(launcher.urllib.request, "urlopen", fake_urlopen)
+
+    launcher.write_instance_file(port)
+
+    assert launcher.find_existing() == port
+
+
+def test_remove_instance_file_is_safe_when_nothing_exists(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(api, "OUTPUT_DIR", tmp_path / "output-not-created")
+
+    launcher.remove_instance_file()  # must not raise
 
 
 def test_alive_probe_identifies_this_service() -> None:
