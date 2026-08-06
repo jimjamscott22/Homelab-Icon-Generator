@@ -6,6 +6,7 @@ Knows about process lifecycle only. All HTTP behaviour lives in app.web.api.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import threading
@@ -24,6 +25,8 @@ HOST = "127.0.0.1"
 WATCHDOG_INTERVAL = 2.0
 STARTUP_TIMEOUT = 30.0
 INSTANCE_FILENAME = ".instance"
+
+_log = logging.getLogger(__name__)
 
 
 def _can_bind(port: int) -> bool:
@@ -77,8 +80,18 @@ def write_instance_file(port: int) -> None:
     """Record the bound port so a relaunch can find this instance directly
     instead of guessing where it is. Call only after startup is confirmed —
     a file naming a port nothing is listening on is worse than no file.
+
+    Best-effort, like the gallery-record failure in app.web.api: the file is
+    a relaunch optimization, not the product, and by this point the server
+    is already up and serving. Losing the write just means the next relaunch
+    finds no file and starts a fresh instance — the pre-existing behavior —
+    which is obviously better than an unhandled exception killing an
+    already-running server with no console to show the traceback in.
     """
-    _instance_file().write_text(str(port), encoding="utf-8")
+    try:
+        _instance_file().write_text(str(port), encoding="utf-8")
+    except OSError:
+        _log.exception("failed to write instance file")
 
 
 def remove_instance_file() -> None:

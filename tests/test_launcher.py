@@ -215,6 +215,26 @@ def test_remove_instance_file_is_safe_when_nothing_exists(tmp_path, monkeypatch)
     launcher.remove_instance_file()  # must not raise
 
 
+def test_write_instance_file_swallows_a_failing_write(tmp_path, monkeypatch) -> None:
+    """The instance file is a relaunch optimization, not the product, and by
+    the time it's written the server is already up and serving (matching
+    the gallery-record failure handling in app.web.api). A write failure —
+    read-only mount, quota, antivirus lock — must be logged and swallowed,
+    never propagate and take down an already-running server.
+    """
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(api, "OUTPUT_DIR", output_dir)
+
+    class _UnwritablePath:
+        def write_text(self, *args, **kwargs):
+            raise OSError("disk full")
+
+    monkeypatch.setattr(launcher, "_instance_file", lambda: _UnwritablePath())
+
+    launcher.write_instance_file(5000)  # must not raise
+
+
 def test_alive_probe_identifies_this_service() -> None:
     with TestClient(api.app) as client:
         assert client.get("/api/alive").json()["service"] == api.ALIVE_MARKER
