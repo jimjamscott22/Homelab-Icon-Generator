@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -187,10 +189,51 @@ def test_search_with_non_integer_limit_is_a_client_error(client) -> None:
     assert response.json()["error"] == "limit must be an integer"
 
 
+def test_output_dir_follows_cwd_not_package_install_location(tmp_path: Path) -> None:
+    """OUTPUT_DIR is computed at import time from Path.cwd(), so this pins
+    the computation with a fresh subprocess per working directory rather than
+    relying on the already-imported (and possibly monkeypatched) module.
+    """
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    code = "from app.web import api; print(api.OUTPUT_DIR)"
+
+    result_first = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=first,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result_second = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=second,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert Path(result_first.stdout.strip()) == first / "output"
+    assert Path(result_second.stdout.strip()) == second / "output"
+
+
 def test_generate_with_non_integer_size_is_a_client_error(client) -> None:
     response = client.post(
         "/api/generate",
         json={"name": "Nextcloud", "category": "cloud_service", "size": "abc"},
+    )
+
+    assert response.status_code == 400
+    assert "error" in response.json()
+
+
+def test_generate_with_unparseable_json_body_is_a_client_error(client) -> None:
+    response = client.post(
+        "/api/generate",
+        content="not json",
+        headers={"content-type": "application/json"},
     )
 
     assert response.status_code == 400

@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS generations (
   match_method TEXT,
   used_fallback INTEGER NOT NULL,
   files TEXT NOT NULL,
+  -- Stored for potential future use; recent() intentionally recomputes the
+  -- thumbnail fresh from the surviving-files set instead of reading this
+  -- back, since a stored value could point at a since-deleted file.
   thumb_rel TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_generations_created_at

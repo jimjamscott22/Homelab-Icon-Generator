@@ -50,6 +50,19 @@ def probe_existing(port: int, timeout: float = 0.5) -> bool:
     return isinstance(body, dict) and body.get("service") == api.ALIVE_MARKER
 
 
+def find_existing(preferred: int, attempts: int = 20, timeout: float = 0.5) -> int | None:
+    """Scan the same candidate range `find_free_port` would try, looking for
+    OUR server. A relaunch must find an instance that fell back to a
+    non-preferred port, not just probe the preferred one and start a
+    silent second instance.
+    """
+    for offset in range(attempts):
+        candidate = preferred + offset
+        if probe_existing(candidate, timeout=timeout):
+            return candidate
+    return None
+
+
 def _watch(server: uvicorn.Server) -> None:
     """Shut uvicorn down once the browser stops checking in."""
     while not server.should_exit:
@@ -62,8 +75,9 @@ def _watch(server: uvicorn.Server) -> None:
 def run() -> int:
     preferred = int(os.environ.get("PORT", DEFAULT_PORT))
 
-    if probe_existing(preferred):
-        url = f"http://{HOST}:{preferred}/"
+    existing_port = find_existing(preferred)
+    if existing_port is not None:
+        url = f"http://{HOST}:{existing_port}/"
         print(f"Homelab Icon Generator already running — opening {url}")
         webbrowser.open(url)
         return 0

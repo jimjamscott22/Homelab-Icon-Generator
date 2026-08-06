@@ -28,9 +28,11 @@ from app.utils.validation import (
 from app.web.history import GalleryStore
 from app.web.schemas import GenerateRequest
 
-ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-OUTPUT_DIR = ROOT / "output"
+# Resolved from the working directory (like the CLI's `--output-dir` default),
+# not the package install location — an installed wheel must not write into
+# site-packages. Override with HOMELAB_OUTPUT_DIR.
+OUTPUT_DIR = Path(os.environ.get("HOMELAB_OUTPUT_DIR", Path.cwd() / "output"))
 
 app = FastAPI(title="Homelab Icon Generator", docs_url="/api/docs", redoc_url=None)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -187,7 +189,7 @@ def generate(payload: GenerateRequest | None = None):
         fmt: f"/output/{Path(p).resolve().relative_to(OUTPUT_DIR.resolve()).as_posix()}"
         for fmt, p in result.paths.items()
     }
-    payload = {
+    response_payload = {
         "files": files,
         "elapsed_ms": elapsed_ms,
         "name": req.name,
@@ -207,11 +209,11 @@ def generate(payload: GenerateRequest | None = None):
     gallery = get_gallery()
     if gallery is not None:
         try:
-            gallery.record(payload)
+            gallery.record(response_payload)
         except Exception:
             # The icon is the product; history is a convenience.
             _log.exception("failed to record gallery entry")
-    return payload
+    return response_payload
 
 
 _OUTPUT_FORMATS = frozenset({"png", "svg", "ico"})

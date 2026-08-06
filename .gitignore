@@ -204,7 +204,3 @@ output/svg/**
 output/ico/**
 !output/.gitkeep
 /output
-output/.gallery.db
-output/.gallery.db-wal
-output/.gallery.db-shm
-output/.gallery.db.bad

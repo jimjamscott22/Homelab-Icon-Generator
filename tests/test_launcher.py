@@ -69,6 +69,53 @@ def test_probe_rejects_a_non_dict_json_body(monkeypatch) -> None:
     assert launcher.probe_existing(5000, timeout=0.2) is False
 
 
+def test_probe_rejects_a_foreign_service_with_a_mismatched_marker(monkeypatch) -> None:
+    """A foreign service can answer with valid JSON shaped like ours but
+    naming a different service — that must not be adopted as our instance.
+    """
+
+    class _StubResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+        def read(self):
+            return b'{"service": "grafana"}'
+
+    monkeypatch.setattr(
+        launcher.urllib.request,
+        "urlopen",
+        lambda *a, **k: _StubResponse(),
+    )
+
+    assert launcher.probe_existing(5000, timeout=0.2) is False
+
+
+def test_find_existing_scans_the_whole_range_find_free_port_would_try(monkeypatch) -> None:
+    """A relaunch must not stop at the preferred port: if it's held by a
+    foreign service but our server fell back to a higher port in the same
+    range find_free_port would scan, find_existing must locate it instead of
+    reporting no existing instance (which would start a silent duplicate).
+    """
+    preferred = 5000
+    our_port = preferred + 3
+
+    def fake_probe(port: int, timeout: float = 0.5) -> bool:
+        return port == our_port
+
+    monkeypatch.setattr(launcher, "probe_existing", fake_probe)
+
+    assert launcher.find_existing(preferred) == our_port
+
+
+def test_find_existing_returns_none_when_nothing_answers(monkeypatch) -> None:
+    monkeypatch.setattr(launcher, "probe_existing", lambda port, timeout=0.5: False)
+
+    assert launcher.find_existing(5000, attempts=5) is None
+
+
 def test_alive_probe_identifies_this_service() -> None:
     with TestClient(api.app) as client:
         assert client.get("/api/alive").json()["service"] == api.ALIVE_MARKER

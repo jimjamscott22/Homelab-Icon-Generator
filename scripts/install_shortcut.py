@@ -26,6 +26,9 @@ def _launch_target() -> tuple[Path, Path]:
     if not pythonw.is_file():
         pythonw = Path(sys.executable)
     entry = scripts_dir / "homelab-icons.exe"
+    # `entry` itself is never used as the shortcut target (pythonw is, see
+    # the module docstring) — this check is only an "is this environment
+    # actually set up?" precondition. Do not remove it as dead code.
     if not entry.is_file():
         raise SystemExit(
             "homelab-icons is not installed in this environment — run `uv sync` first"
