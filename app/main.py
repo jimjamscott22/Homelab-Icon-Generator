@@ -13,6 +13,7 @@ from app.models.icon_request import IconRequest
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate homelab icons for devices and services.",
+        epilog="Run with no arguments to open the web UI.",
     )
 
     parser.add_argument("--name", type=str, default=None, help="Device/service name")
@@ -134,6 +135,12 @@ def run_batch(json_path: str, output_dir: str, icon_dir: str | None = None) -> N
 
 
 def main() -> None:
+    # No arguments: this is a web-first tool, so open the UI.
+    if len(sys.argv) == 1:
+        from app.web.launcher import run
+
+        raise SystemExit(run())
+
     parser, args = parse_args()
 
     if args.batch:
