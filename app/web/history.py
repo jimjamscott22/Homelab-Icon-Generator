@@ -10,13 +10,9 @@ import json
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 MAX_ROWS = 500
-
-#: Regenerating with these values identical overwrites the same file on disk,
-#: so the row is updated and bumped rather than duplicated.
-_IDENTITY = ("name", "category", "style", "theme", "size", "format", "transparent_bg", "icon")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS generations (
@@ -39,12 +35,17 @@ CREATE TABLE IF NOT EXISTS generations (
   -- Stored for potential future use; recent() intentionally recomputes the
   -- thumbnail fresh from the surviving-files set instead of reading this
   -- back, since a stored value could point at a since-deleted file.
-  thumb_rel TEXT
+  thumb_rel TEXT,
+  -- The real uniqueness constraint: the output path(s) a generation actually
+  -- wrote (minus format directory and extension). Two requests that render
+  -- to the same file on disk MUST collapse to one row, no matter how their
+  -- settings differ (see _derive_output_key). Column is added via migration
+  -- for legacy databases, so it can't carry a NOT NULL here for those; new
+  -- databases always populate it through record()/the migration backfill.
+  output_key TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_generations_created_at
   ON generations(created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_generations_identity
-  ON generations(name, category, style, theme, size, format, transparent_bg, icon);
 """
 
 _URL_PREFIX = "/output/"
@@ -67,6 +68,32 @@ def _pick_thumb(files: dict[str, str]) -> str | None:
     return None
 
 
+def _output_key_from_rel(rel: str) -> str | None:
+    """'svg/cloud_service/nextcloud-minimal-blue-256.svg' -> 'cloud_service/nextcloud-minimal-blue-256'.
+
+    Strips the leading format directory and the extension, leaving the part
+    of the path that every format of one generation shares — i.e. the real
+    identity of "what got written to disk".
+    """
+    parts = PurePosixPath(rel).parts
+    if len(parts) < 2:
+        return None
+    return str(PurePosixPath(*parts[1:]).with_suffix(""))
+
+
+def _derive_output_key(files: dict[str, str]) -> str | None:
+    """Derive the shared output key from any one entry in a files mapping.
+
+    Every format written by a single generation shares the same base path,
+    so the first usable entry is sufficient.
+    """
+    for rel in files.values():
+        key = _output_key_from_rel(rel)
+        if key:
+            return key
+    return None
+
+
 class GalleryStore:
     def __init__(self, db_path: Path, output_dir: Path) -> None:
         self._db_path = Path(db_path)
@@ -83,6 +110,7 @@ class GalleryStore:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
             conn.commit()
+            self._migrate(conn)
             return conn
         except sqlite3.DatabaseError:
             # Corrupt file: move it aside and start clean. History is a
@@ -101,11 +129,62 @@ class GalleryStore:
                 conn.execute("PRAGMA journal_mode=WAL")
                 conn.executescript(_SCHEMA)
                 conn.commit()
+                self._migrate(conn)
                 return conn
             except Exception:
                 if conn is not None:
                     conn.close()
                 raise
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """Bring an existing database up to the output_key identity model.
+
+        Idempotent and safe on a brand-new empty database: every step is a
+        no-op there (column already present, no old index, no duplicate
+        rows to collapse).
+        """
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(generations)")}
+        if "output_key" not in columns:
+            conn.execute("ALTER TABLE generations ADD COLUMN output_key TEXT")
+            for row in conn.execute("SELECT id, files FROM generations").fetchall():
+                try:
+                    files = json.loads(row["files"])
+                except (json.JSONDecodeError, TypeError):
+                    files = {}
+                key = _derive_output_key(files) if isinstance(files, dict) else None
+                conn.execute(
+                    "UPDATE generations SET output_key = ? WHERE id = ?", (key, row["id"])
+                )
+
+        # Superseded by the output_key index below; old databases still
+        # carry it and it would otherwise conflict with legitimate updates
+        # (same output_key, different name/format/icon/etc).
+        conn.execute("DROP INDEX IF EXISTS idx_generations_identity")
+
+        # Rows whose files couldn't yield a key (corrupt/empty) reference
+        # nothing usable and would break the NOT NULL-equivalent uniqueness
+        # constraint below — drop them rather than leave them unmigratable.
+        conn.execute("DELETE FROM generations WHERE output_key IS NULL OR output_key = ''")
+
+        # Collapse rows that collide under the real (output_key) identity,
+        # keeping the newest write per key — exactly the duplicates this
+        # migration exists to clean up.
+        conn.execute(
+            "DELETE FROM generations WHERE id NOT IN ("
+            "  SELECT id FROM ("
+            "    SELECT id, ROW_NUMBER() OVER ("
+            "      PARTITION BY output_key ORDER BY created_at DESC, id DESC"
+            "    ) AS rn FROM generations"
+            "  ) WHERE rn = 1"
+            ")"
+        )
+
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_generations_output_key "
+            "ON generations(output_key)"
+        )
+        conn.commit()
 
     def close(self) -> None:
         with self._lock:
@@ -113,6 +192,9 @@ class GalleryStore:
 
     def record(self, payload: dict) -> None:
         files = {fmt: _to_rel(url) for fmt, url in payload["files"].items()}
+        output_key = _derive_output_key(files)
+        if output_key is None:
+            raise ValueError("record() requires at least one usable output file path")
         row = {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "name": payload["name"],
@@ -130,19 +212,21 @@ class GalleryStore:
             "used_fallback": int(bool(payload["used_fallback"])),
             "files": json.dumps(files),
             "thumb_rel": _pick_thumb(files),
+            "output_key": output_key,
         }
         columns = ", ".join(row)
         placeholders = ", ".join(f":{key}" for key in row)
-        conflict = ", ".join(_IDENTITY)
+        # The real identity is output_key (see class docstring / module
+        # comment): whatever wrote to the same file wins. Every other column
+        # is mutable across regenerations that share that file, so the
+        # DO UPDATE SET below covers all of them — a column silently
+        # retaining a stale value here is exactly the bug this replaces.
+        update_columns = [key for key in row if key != "output_key"]
+        updates = ", ".join(f"{key}=excluded.{key}" for key in update_columns)
         with self._lock:
             self._conn.execute(
                 f"INSERT INTO generations ({columns}) VALUES ({placeholders}) "
-                f"ON CONFLICT({conflict}) DO UPDATE SET "
-                "created_at=excluded.created_at, files=excluded.files, "
-                "thumb_rel=excluded.thumb_rel, icon_key=excluded.icon_key, "
-                "icon_title=excluded.icon_title, icon_source=excluded.icon_source, "
-                "match_method=excluded.match_method, "
-                "used_fallback=excluded.used_fallback",
+                f"ON CONFLICT(output_key) DO UPDATE SET {updates}",
                 row,
             )
             # Prune rows only. Files on disk are never deleted automatically.
