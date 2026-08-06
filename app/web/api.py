@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import logging
 import os
 import threading
 import time
@@ -24,6 +25,7 @@ from app.utils.validation import (
     VALID_STYLES,
     VALID_THEMES,
 )
+from app.web.history import GalleryStore
 from app.web.schemas import GenerateRequest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +51,45 @@ def _allow_request() -> bool:
             return False
         _req_times.append(now)
         return True
+
+
+_log = logging.getLogger(__name__)
+_gallery: GalleryStore | None = None
+_gallery_dir: Path | None = None
+_gallery_lock = threading.Lock()
+
+
+def get_gallery() -> GalleryStore | None:
+    """Return the store for the current OUTPUT_DIR, rebuilding if it changed.
+
+    Returns None if the store cannot be opened; a broken gallery must never
+    stop icons from being generated.
+    """
+    global _gallery, _gallery_dir
+    with _gallery_lock:
+        if _gallery is not None and _gallery_dir == OUTPUT_DIR:
+            return _gallery
+        if _gallery is not None:
+            _gallery.close()
+            _gallery = None
+        try:
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            _gallery = GalleryStore(OUTPUT_DIR / ".gallery.db", OUTPUT_DIR)
+            _gallery_dir = OUTPUT_DIR
+        except Exception:
+            _log.exception("gallery unavailable")
+            _gallery = None
+        return _gallery
+
+
+def reset_gallery() -> None:
+    """Drop the cached store. Used by tests between OUTPUT_DIR swaps."""
+    global _gallery, _gallery_dir
+    with _gallery_lock:
+        if _gallery is not None:
+            _gallery.close()
+        _gallery = None
+        _gallery_dir = None
 
 
 @app.exception_handler(RequestValidationError)
@@ -146,7 +187,7 @@ def generate(payload: GenerateRequest | None = None):
         fmt: f"/output/{Path(p).resolve().relative_to(OUTPUT_DIR.resolve()).as_posix()}"
         for fmt, p in result.paths.items()
     }
-    return {
+    payload = {
         "files": files,
         "elapsed_ms": elapsed_ms,
         "name": req.name,
@@ -163,6 +204,14 @@ def generate(payload: GenerateRequest | None = None):
         "match_method": result.resolution.match_method,
         "used_fallback": result.resolution.used_fallback,
     }
+    gallery = get_gallery()
+    if gallery is not None:
+        try:
+            gallery.record(payload)
+        except Exception:
+            # The icon is the product; history is a convenience.
+            _log.exception("failed to record gallery entry")
+    return payload
 
 
 _OUTPUT_FORMATS = frozenset({"png", "svg", "ico"})
@@ -182,3 +231,11 @@ def serve_output(fmt: str, category: str, filename: str):
     return FileResponse(
         target, headers={"Cache-Control": "public, max-age=31536000, immutable"}
     )
+
+
+@app.get("/api/history")
+def history(limit: int = 50, offset: int = 0):
+    gallery = get_gallery()
+    if gallery is None:
+        return {"items": []}
+    return {"items": gallery.recent(limit=limit, offset=offset)}

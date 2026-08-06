@@ -15,8 +15,10 @@ from app.utils.validation import VALID_CATEGORIES, VALID_FORMATS
 def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(api, "OUTPUT_DIR", tmp_path / "output")
     api._req_times.clear()
+    api.reset_gallery()
     with TestClient(api.app) as test_client:
         yield test_client
+    api.reset_gallery()
 
 
 def test_options_exposes_every_backend_choice(client) -> None:
@@ -109,6 +111,32 @@ def test_generate_with_empty_body_is_a_client_error(client) -> None:
 
     assert response.status_code == 400
     assert "error" in response.json()
+
+
+def test_generate_populates_history(client) -> None:
+    client.post(
+        "/api/generate",
+        json={"name": "Nextcloud", "category": "cloud_service", "format": "svg"},
+    )
+
+    items = client.get("/api/history").json()["items"]
+
+    assert len(items) == 1
+    assert items[0]["name"] == "Nextcloud"
+    assert items[0]["icon_key"] == "nextcloud"
+    assert items[0]["thumb"].startswith("/output/svg/")
+
+
+def test_history_is_empty_before_any_generation(client) -> None:
+    assert client.get("/api/history").json()["items"] == []
+
+
+def test_repeat_generation_does_not_duplicate_history(client) -> None:
+    body = {"name": "Nextcloud", "category": "cloud_service", "format": "svg"}
+    client.post("/api/generate", json=body)
+    client.post("/api/generate", json=body)
+
+    assert len(client.get("/api/history").json()["items"]) == 1
 
 
 def test_search_with_non_integer_limit_is_a_client_error(client) -> None:
