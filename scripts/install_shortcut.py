@@ -1,5 +1,10 @@
 """Create Windows shortcuts that launch the Homelab Icon Generator web UI.
 
+The shortcut targets `pythonw.exe -m app.main` (not the `homelab-icons.exe`
+console-script shim) so double-clicking it opens the web UI with no console
+window. `homelab-icons.exe` is a console-subsystem executable — launching it
+directly would flash a console window even with a minimised window style.
+
 Maintainer script. Run once after `uv sync`:
 
     uv run python -m scripts.install_shortcut
@@ -31,14 +36,13 @@ def _launch_target() -> tuple[Path, Path]:
 def _targets() -> list[Path]:
     home = Path.home()
     desktop = home / "Desktop"
-    start_menu = (
-        Path(os.environ["APPDATA"])
-        / "Microsoft"
-        / "Windows"
-        / "Start Menu"
-        / "Programs"
-    )
-    return [directory for directory in (desktop, start_menu) if directory.is_dir()]
+    directories = [desktop]
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        directories.append(
+            Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+        )
+    return [directory for directory in directories if directory.is_dir()]
 
 
 def main() -> int:
@@ -49,22 +53,24 @@ def main() -> int:
     try:
         import win32com.client  # type: ignore
     except ImportError:
-        _, entry = _launch_target()
+        pythonw, _ = _launch_target()
         print(
             "pywin32 is not installed, so the shortcut cannot be created "
             "automatically.\nCreate one by hand pointing at:\n"
-            f"  {entry}\n"
+            f"  {pythonw}\n"
+            '  with arguments: -m app.main\n'
             "Install pywin32 with `uv add --dev pywin32` to automate this."
         )
         return 1
 
-    _, entry = _launch_target()
+    pythonw, _ = _launch_target()
     shell = win32com.client.Dispatch("WScript.Shell")
     created = []
     for directory in _targets():
         path = directory / SHORTCUT_NAME
         shortcut = shell.CreateShortCut(str(path))
-        shortcut.TargetPath = str(entry)
+        shortcut.TargetPath = str(pythonw)
+        shortcut.Arguments = "-m app.main"
         shortcut.WorkingDirectory = str(Path.cwd())
         shortcut.Description = "Open the Homelab Icon Generator web UI"
         shortcut.WindowStyle = 7  # minimised

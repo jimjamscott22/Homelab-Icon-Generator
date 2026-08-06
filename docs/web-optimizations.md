@@ -1,5 +1,7 @@
 # Web Interface Optimizations
 
+*Historical — this reviewed the pre-FastAPI `server.py`, which was replaced during the web-first migration. Retained for the record.*
+
 Punch list of issues found while reviewing `server.py` and `app/web/static/index.html`. Ordered roughly by impact.
 
 ## Bugs & correctness
