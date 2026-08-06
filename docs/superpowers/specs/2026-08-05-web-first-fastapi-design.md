@@ -185,7 +185,7 @@ those rules is how they drift.
 | Condition | Behavior |
 |---|---|
 | Domain validation | 400 `{"error": ...}` — unchanged shape |
-| Malformed/missing JSON | FastAPI 422, normalized to the same `{"error": ...}` body by an exception handler |
+| Malformed/missing JSON, or a bad `size`/`limit` value | 400 `{"error": ...}` via an exception handler. FastAPI defaults to 422, but Flask returned 400 for all of these, and the byte-identical constraint governs |
 | Generation raises | 500 `{"error": "generation failed: ..."}` — unchanged |
 | Rate limit | 429; same limiter and same `GENERATE_RATE_LIMIT` / `GENERATE_RATE_WINDOW` env vars |
 | History write fails | Logged and swallowed. A broken gallery must never fail a generation — the icon is the product, history is a convenience |
