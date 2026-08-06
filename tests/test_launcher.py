@@ -1,0 +1,81 @@
+"""Launcher: port selection, instance probing, and idle shutdown."""
+
+from __future__ import annotations
+
+import socket
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.web import api, launcher
+
+
+def test_find_free_port_returns_preferred_when_available() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((launcher.HOST, 0))
+        free = probe.getsockname()[1]
+
+    assert launcher.find_free_port(free) == free
+
+
+def test_find_free_port_skips_a_bound_port() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as held:
+        held.bind((launcher.HOST, 0))
+        held.listen(1)
+        taken = held.getsockname()[1]
+
+        assert launcher.find_free_port(taken) > taken
+
+
+def test_probe_rejects_a_port_nothing_is_listening_on() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((launcher.HOST, 0))
+        closed = probe.getsockname()[1]
+
+    assert launcher.probe_existing(closed, timeout=0.2) is False
+
+
+def test_probe_rejects_a_foreign_service(monkeypatch) -> None:
+    monkeypatch.setattr(
+        launcher.urllib.request,
+        "urlopen",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("connection refused")),
+    )
+
+    assert launcher.probe_existing(5000, timeout=0.2) is False
+
+
+def test_alive_probe_identifies_this_service() -> None:
+    with TestClient(api.app) as client:
+        assert client.get("/api/alive").json()["service"] == api.ALIVE_MARKER
+
+
+def test_heartbeat_stays_disarmed_until_the_first_ping() -> None:
+    clock = iter([0.0, 100.0, 200.0])
+    beat = api.Heartbeat(timeout=30.0, clock=lambda: next(clock))
+
+    assert beat.armed() is False
+    assert beat.expired() is False, "a server with no browser must not self-terminate"
+
+
+def test_heartbeat_expires_after_silence() -> None:
+    now = [0.0]
+    beat = api.Heartbeat(timeout=30.0, clock=lambda: now[0])
+    beat.beat()
+
+    assert beat.armed() is True
+    now[0] = 29.0
+    assert beat.expired() is False
+    now[0] = 31.0
+    assert beat.expired() is True
+
+
+def test_heartbeat_resets_on_each_ping() -> None:
+    now = [0.0]
+    beat = api.Heartbeat(timeout=30.0, clock=lambda: now[0])
+    beat.beat()
+    now[0] = 29.0
+    beat.beat()
+    now[0] = 50.0
+
+    assert beat.expired() is False

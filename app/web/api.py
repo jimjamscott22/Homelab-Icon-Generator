@@ -239,3 +239,49 @@ def history(limit: int = 50, offset: int = 0):
     if gallery is None:
         return {"items": []}
     return {"items": gallery.recent(limit=limit, offset=offset)}
+
+
+ALIVE_MARKER = "homelab-icon-generator"
+
+
+class Heartbeat:
+    """Tracks liveness pings from the browser tab.
+
+    Stays disarmed until the first ping, so a server whose browser never
+    connected will not shut itself down.
+    """
+
+    def __init__(self, timeout: float = 30.0, clock=time.monotonic) -> None:
+        self._timeout = timeout
+        self._clock = clock
+        self._last: float | None = None
+        self._lock = threading.Lock()
+
+    def beat(self) -> None:
+        with self._lock:
+            self._last = self._clock()
+
+    def armed(self) -> bool:
+        with self._lock:
+            return self._last is not None
+
+    def expired(self) -> bool:
+        with self._lock:
+            if self._last is None:
+                return False
+            return (self._clock() - self._last) > self._timeout
+
+
+HEARTBEAT = Heartbeat()
+
+
+@app.get("/api/alive")
+def alive_probe() -> dict:
+    """Identifies this process so the launcher never adopts a foreign server."""
+    return {"service": ALIVE_MARKER}
+
+
+@app.post("/api/alive")
+def alive_beat() -> dict:
+    HEARTBEAT.beat()
+    return {"service": ALIVE_MARKER}
