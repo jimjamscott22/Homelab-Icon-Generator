@@ -6,6 +6,14 @@ const HEARTBEAT_MS = 5000;
 
 let galleryLoaded = 0;
 let galleryExhausted = false;
+const _galleryKeys = new Set();
+
+function _recordKey(record) {
+  return [
+    record.name, record.category, record.style, record.theme,
+    record.size, record.format, record.transparent_bg, record.icon,
+  ].join(" ");
+}
 
 function _galleryTile(record, num) {
   const slot = el("div", {
@@ -36,17 +44,21 @@ function _renderGallery(items, { append }) {
   if (!append) {
     strip.innerHTML = "";
     galleryLoaded = 0;
+    _galleryKeys.clear();
   }
   strip.querySelector(".empty")?.remove();
   strip.querySelector(".gallery-more")?.remove();
   strip.querySelectorAll(".slot:not(.filled)").forEach((s) => s.remove());
 
-  if (items.length === 0 && galleryLoaded === 0) {
+  const fresh = items.filter((record) => !_galleryKeys.has(_recordKey(record)));
+
+  if (fresh.length === 0 && galleryLoaded === 0) {
     strip.append(el("div", { class: "empty" }, "NO RECENT ARTIFACTS / GENERATE TO POPULATE"));
     return;
   }
 
-  items.forEach((record) => {
+  fresh.forEach((record) => {
+    _galleryKeys.add(_recordKey(record));
     galleryLoaded += 1;
     strip.append(_galleryTile(record, galleryLoaded));
   });
