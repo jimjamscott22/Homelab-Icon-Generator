@@ -19,7 +19,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", type=str, default=None, help="Device/service name")
     parser.add_argument("--category", type=str, default=None, help="One of the 12 valid categories")
     parser.add_argument("--style", type=str, default="minimal", help="minimal / terminal / cyberpunk")
-    parser.add_argument("--theme", type=str, default="blue", help="green / blue / orange / purple / grayscale")
+    parser.add_argument("--theme", type=str, default="blue", help="green / blue / orange / purple / grayscale / custom")
+    parser.add_argument(
+        "--custom-color",
+        type=str,
+        default=None,
+        help='Custom theme color as "#RRGGBB" (requires --theme custom)',
+    )
     parser.add_argument("--size", type=int, default=256, help="Icon size in pixels")
     parser.add_argument("--format", type=str, default="both", help="png / svg / both")
     parser.add_argument(
@@ -47,6 +53,7 @@ def run_single(args: argparse.Namespace) -> None:
         category=args.category,
         style=args.style,
         theme=args.theme,
+        custom_color=getattr(args, "custom_color", None),
         size=args.size,
         format=args.format,
         icon=args.icon,
@@ -111,6 +118,7 @@ def run_batch(json_path: str, output_dir: str, icon_dir: str | None = None) -> N
                 category=entry["category"],
                 style=entry.get("style", "minimal"),
                 theme=entry.get("theme", "blue"),
+                custom_color=entry.get("custom_color"),
                 size=entry.get("size", 256),
                 format=entry.get("format", "both"),
                 icon=entry.get("icon", "auto"),

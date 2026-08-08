@@ -23,6 +23,7 @@ class IconRequest:
     icon: str = "auto"            # "auto" | "generic" | stable icon key
     transparent_bg: bool = False
     output_dir: str = "output"
+    custom_color: str | None = None
 
     @property
     def initials(self) -> str:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.generator.colors import COLOR_THEMES, CUSTOM_THEME, normalize_hex_color
+
 if TYPE_CHECKING:
     from app.models.icon_request import IconRequest
 
@@ -16,7 +18,7 @@ VALID_CATEGORIES = {
     "firewall", "vpn", "nas", "power",
 }
 VALID_STYLES = {"minimal", "terminal", "cyberpunk"}
-VALID_THEMES = {"green", "blue", "orange", "purple", "grayscale"}
+VALID_THEMES = set(COLOR_THEMES) | {CUSTOM_THEME}
 VALID_FORMATS = {"png", "svg", "ico", "both", "all"}
 
 _MIN_SIZE = 32
@@ -49,6 +51,12 @@ def validate_request(request: IconRequest) -> None:
             f"Invalid theme '{request.theme}'. "
             f"Valid options: {sorted(VALID_THEMES)}"
         )
+    if request.theme == CUSTOM_THEME:
+        if request.custom_color is None:
+            raise ValueError("theme 'custom' requires custom_color")
+        normalize_hex_color(request.custom_color)
+    elif request.custom_color is not None:
+        raise ValueError("custom_color is only valid when theme is 'custom'")
     if request.format not in VALID_FORMATS:
         raise ValueError(
             f"Invalid format '{request.format}'. "

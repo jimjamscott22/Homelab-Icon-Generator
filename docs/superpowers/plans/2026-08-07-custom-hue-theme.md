@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Execution override (2026-08-07):** The user requested inline implementation
+> without subagents or TDD. Implement each task directly, then add and run its
+> focused tests before advancing to the next task.
+
 **Goal:** Add a sixth custom theme to the Hue selector that uses a compact native color picker and generates a complete deterministic palette from any selected `#RRGGBB` color.
 
 **Architecture:** Preserve the five static palettes and represent user colors as `theme="custom"` plus an optional `custom_color` request field. Central color helpers validate, normalize, and derive a `ColorPalette`; renderer, API, CLI, history, and frontend pass that value explicitly, with the normalized hex included in custom output filenames.

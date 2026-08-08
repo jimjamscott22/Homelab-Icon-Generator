@@ -8,6 +8,7 @@ const state = {
   category: "server",
   style: "minimal",
   theme: "blue",
+  customColor: "#00b8a9",
   format: "both",
   size: 256,
   transparent: false,
@@ -99,8 +100,12 @@ function renderThemes() {
       "data-theme": t,
       "data-value": t,
       "aria-pressed": t === state.theme ? "true" : "false",
-      onclick: () => setTheme(t),
+      onclick: () => {
+        setTheme(t);
+        if (t === "custom") $("customColor").click();
+      },
     });
+    if (t === "custom") btn.style.setProperty("--swatch", state.customColor);
     btn.append(el("span", { class: "pip" }), el("span", {}, t.slice(0, 3)));
     host.append(btn);
   });
@@ -110,8 +115,22 @@ function setTheme(v) {
   document.querySelectorAll("#themes .theme-swatch").forEach((c) =>
     c.setAttribute("aria-pressed", c.dataset.value === v ? "true" : "false")
   );
+  $("customColorEditor").hidden = v !== "custom";
   syncCli();
 }
+
+function setCustomColor(value) {
+  state.customColor = value.toLowerCase();
+  $("customColor").value = state.customColor;
+  $("customColorValue").textContent = state.customColor;
+  document.querySelector('[data-theme="custom"]')
+    ?.style.setProperty("--swatch", state.customColor);
+  setTheme("custom");
+}
+
+$("customColor").addEventListener("input", (event) => {
+  setCustomColor(event.target.value);
+});
 
 function renderFormats() {
   const host = $("formats");
@@ -266,6 +285,9 @@ function syncCli() {
     `--format ${state.format}`,
     `--icon ${state.icon}`,
   ];
+  if (state.theme === "custom") {
+    args.push(`--custom-color "${state.customColor}"`);
+  }
   if (state.transparent) args.push("--transparent");
   _cliText = `homelab-icons ${args.join(" ")}`;
 
@@ -279,6 +301,9 @@ function syncCli() {
     `--format <b>${state.format}</b>`,
     `--icon <b>${state.icon}</b>`,
   ];
+  if (state.theme === "custom") {
+    parts.push(`--custom-color <b>"${state.customColor}"</b>`);
+  }
   if (state.transparent) parts.push(`<b>--transparent</b>`);
   $("cli").innerHTML = parts.join(" \\<br>&nbsp;&nbsp;");
 }
@@ -348,7 +373,10 @@ $("form").addEventListener("submit", async (e) => {
   $("mStatus").textContent = "BUILDING…";
   $("mStatus").className = "amber";
   $("axisId").textContent = "BUILDING";
-  log(`<span class="amber">[REQ]</span> ${escapeHtml(state.name)} / ${state.category} / ${state.style}-${state.theme}-${state.size}`);
+  const themeLabel = state.theme === "custom"
+    ? `custom-${state.customColor}`
+    : state.theme;
+  log(`<span class="amber">[REQ]</span> ${escapeHtml(state.name)} / ${state.category} / ${state.style}-${themeLabel}-${state.size}`);
 
   try {
     const res = await fetch("/api/generate", {
@@ -359,6 +387,7 @@ $("form").addEventListener("submit", async (e) => {
         category: state.category,
         style: state.style,
         theme: state.theme,
+        custom_color: state.theme === "custom" ? state.customColor : null,
         size: state.size,
         format: state.format,
         icon: state.icon,
@@ -403,7 +432,9 @@ function onBuildSuccess(data) {
   $("mStatus").style.color = "";
   $("mCat").textContent = data.category.replace(/_/g, " ").toUpperCase();
   $("mStyle").textContent = data.style.toUpperCase();
-  $("mTheme").textContent = data.theme.toUpperCase();
+  $("mTheme").textContent = data.theme === "custom"
+    ? `CUSTOM ${data.custom_color.toUpperCase()}`
+    : data.theme.toUpperCase();
   $("mSize").textContent = `${data.size} × ${data.size} PX`;
   $("mFmt").textContent = data.format.toUpperCase();
   $("mIcon").textContent = data.icon_title.toUpperCase();

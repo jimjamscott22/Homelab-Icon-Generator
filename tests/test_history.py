@@ -18,6 +18,7 @@ def _payload(name: str = "Nextcloud", **overrides) -> dict:
         "category": "server",
         "style": "minimal",
         "theme": "blue",
+        "custom_color": None,
         "size": 256,
         "format": "svg",
         "transparent_bg": False,
@@ -63,6 +64,22 @@ def test_record_round_trips_settings(store) -> None:
     assert items[0]["transparent_bg"] is False
     assert items[0]["files"] == {"svg": "/output/svg/server/nextcloud.svg"}
     assert items[0]["thumb"] == "/output/svg/server/nextcloud.svg"
+
+
+def test_custom_color_round_trips(store) -> None:
+    gallery, output_dir = store
+    payload = _payload(
+        theme="custom",
+        custom_color="#00b8a9",
+        files={"svg": "/output/svg/server/node-custom-00b8a9.svg"},
+    )
+    _touch(output_dir, payload["files"]["svg"])
+
+    gallery.record(payload)
+
+    item = gallery.recent()[0]
+    assert item["theme"] == "custom"
+    assert item["custom_color"] == "#00b8a9"
 
 
 def test_identical_settings_update_in_place_instead_of_duplicating(
@@ -348,7 +365,16 @@ def test_migration_collapses_pre_existing_duplicates_and_rebuilds_the_index(
     try:
         items = gallery.recent()
 
+        columns = {
+            row["name"]
+            for row in gallery._conn.execute(
+                "PRAGMA table_info(generations)"
+            ).fetchall()
+        }
+
         assert len(items) == 1
+        assert "custom_color" in columns
+        assert items[0]["custom_color"] is None
         assert items[0]["icon"] == "generic"
         assert items[0]["icon_key"] == "generic-server"
         assert items[0]["used_fallback"] is True

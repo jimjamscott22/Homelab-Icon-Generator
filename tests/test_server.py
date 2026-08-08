@@ -30,6 +30,7 @@ def test_options_exposes_every_backend_choice(client) -> None:
     assert response.status_code == 200
     assert set(data["categories"]) == VALID_CATEGORIES
     assert set(data["formats"]) == VALID_FORMATS
+    assert "custom" in data["themes"]
     assert data["icon_modes"] == ["auto", "generic"]
 
 
@@ -61,6 +62,46 @@ def test_generate_reports_brand_resolution_without_breaking_files(client) -> Non
     assert data["match_method"] == "catalog"
     assert data["used_fallback"] is False
     assert set(data["files"]) == {"svg"}
+
+
+def test_generate_custom_theme_returns_normalized_color_and_colored_svg(client) -> None:
+    response = client.post(
+        "/api/generate",
+        json={
+            "name": "Node",
+            "category": "server",
+            "theme": "custom",
+            "custom_color": "#00B8A9",
+            "format": "svg",
+        },
+    )
+    data = response.json()
+
+    assert response.status_code == 200
+    assert data["theme"] == "custom"
+    assert data["custom_color"] == "#00b8a9"
+    assert "custom-00b8a9" in data["files"]["svg"]
+    svg = client.get(data["files"]["svg"]).text
+    assert '#00b8a9' in svg
+
+
+def test_generate_rejects_invalid_custom_theme_combinations(client) -> None:
+    missing = client.post(
+        "/api/generate",
+        json={"name": "Node", "category": "server", "theme": "custom"},
+    )
+    misplaced = client.post(
+        "/api/generate",
+        json={
+            "name": "Node",
+            "category": "server",
+            "theme": "blue",
+            "custom_color": "#00b8a9",
+        },
+    )
+
+    assert missing.status_code == 400
+    assert misplaced.status_code == 400
 
 
 def test_generate_reports_generic_fallback_and_manual_generic(client) -> None:
@@ -106,6 +147,15 @@ def test_page_has_accessible_override_controls_and_no_external_fonts(client) -> 
     assert 'data-icon-key="generic"' in page
     assert 'aria-live="polite"' in page
     assert "fonts.googleapis.com" not in page
+
+
+def test_page_has_accessible_custom_color_editor(client) -> None:
+    page = client.get("/").text
+
+    assert 'id="customColor"' in page
+    assert 'type="color"' in page
+    assert 'id="customColorValue"' in page
+    assert 'aria-label="Choose custom theme color"' in page
 
 
 def test_generate_with_empty_body_is_a_client_error(client) -> None:

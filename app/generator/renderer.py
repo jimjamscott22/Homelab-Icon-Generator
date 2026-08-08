@@ -11,7 +11,7 @@ from typing import Protocol
 
 from PIL import Image
 
-from app.generator.colors import get_palette
+from app.generator.colors import CUSTOM_THEME, get_palette, normalize_hex_color
 from app.generator.layouts import LayoutSpec, get_layout
 from app.generator.rasterizer import rasterize_svg
 from app.generator.svg_composer import compose_svg
@@ -40,8 +40,12 @@ class GenerationResult:
 
 
 @lru_cache(maxsize=64)
-def _resolve_style(style_name: str, theme: str) -> StyleDefinition:
-    palette = get_palette(theme)
+def _resolve_style(
+    style_name: str,
+    theme: str,
+    custom_color: str | None = None,
+) -> StyleDefinition:
+    palette = get_palette(theme, custom_color)
     style_module = importlib.import_module(f"app.styles.{style_name}")
     return style_module.get_style(palette)
 
@@ -94,11 +98,14 @@ def _output_path(request: IconRequest, base: str, extension: str) -> str:
     return os.path.join(destination, f"{base}.{extension}")
 
 
-def _output_base(request: IconRequest) -> str:
+def _output_base(request: IconRequest, custom_color: str | None = None) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", request.name.lower()).strip("-")
     if not slug:
         slug = request.category
-    return f"{slug}-{request.style}-{request.theme}-{request.size}"
+    theme_part = request.theme
+    if request.theme == CUSTOM_THEME and custom_color is not None:
+        theme_part = f"custom-{custom_color.removeprefix('#')}"
+    return f"{slug}-{request.style}-{theme_part}-{request.size}"
 
 
 def generate_icon_result(
@@ -112,10 +119,15 @@ def generate_icon_result(
 
         resolver = get_default_resolver()
     resolution = resolver.resolve(request)
-    style = _resolve_style(request.style, request.theme)
+    custom_color = (
+        normalize_hex_color(request.custom_color)
+        if request.theme == CUSTOM_THEME and request.custom_color is not None
+        else None
+    )
+    style = _resolve_style(request.style, request.theme, custom_color)
     layout = _resolve_layout(request.size, style.font_scale)
     svg = render_svg(request, style, layout, resolution)
-    base = _output_base(request)
+    base = _output_base(request, custom_color)
     paths: dict[str, str] = {}
 
     if request.format in ("svg", "both", "all"):

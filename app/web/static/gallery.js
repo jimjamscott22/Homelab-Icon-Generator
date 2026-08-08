@@ -115,6 +115,9 @@ const Gallery = {
     state.name = record.name;
     setCategory(record.category);
     setStyle(record.style);
+    if (record.theme === "custom" && record.custom_color) {
+      setCustomColor(record.custom_color);
+    }
     setTheme(record.theme);
     setFormat(record.format);
 

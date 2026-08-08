@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from app.generator.colors import CUSTOM_THEME, normalize_hex_color
 from app.generator.renderer import generate_icon_result
 from app.icons.models import VectorIcon
 from app.icons.resolver import get_default_resolver
@@ -171,6 +172,7 @@ def generate(payload: GenerateRequest | None = None):
             category=data.category,
             style=data.style,
             theme=data.theme,
+            custom_color=data.custom_color,
             size=data.size,
             format=data.format,
             icon=data.icon,
@@ -196,6 +198,11 @@ def generate(payload: GenerateRequest | None = None):
         "category": req.category,
         "style": req.style,
         "theme": req.theme,
+        "custom_color": (
+            normalize_hex_color(req.custom_color)
+            if req.theme == CUSTOM_THEME and req.custom_color is not None
+            else None
+        ),
         "size": req.size,
         "format": req.format,
         "transparent_bg": req.transparent_bg,

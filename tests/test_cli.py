@@ -32,6 +32,7 @@ def test_single_request_passes_icon_to_generator(monkeypatch, tmp_path: Path) ->
         category="server",
         style="minimal",
         theme="blue",
+        custom_color=None,
         size=128,
         format="svg",
         icon="generic",
@@ -42,6 +43,29 @@ def test_single_request_passes_icon_to_generator(monkeypatch, tmp_path: Path) ->
     cli.run_single(args)
 
     assert captured[0].icon == "generic"
+
+
+def test_single_request_passes_custom_color_to_generator(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured = []
+    monkeypatch.setattr(cli, "generate_icon", lambda request: captured.append(request) or {})
+    args = Namespace(
+        name="Node",
+        category="server",
+        style="minimal",
+        theme="custom",
+        custom_color="#00B8A9",
+        size=128,
+        format="svg",
+        icon="generic",
+        transparent=False,
+        output_dir=str(tmp_path),
+    )
+
+    cli.run_single(args)
+
+    assert captured[0].custom_color == "#00B8A9"
 
 
 def test_batch_entry_passes_icon_to_generator(monkeypatch, tmp_path: Path) -> None:
@@ -56,6 +80,31 @@ def test_batch_entry_passes_icon_to_generator(monkeypatch, tmp_path: Path) -> No
     cli.run_batch(str(batch), str(tmp_path))
 
     assert captured[0].icon == "nextcloud"
+
+
+def test_batch_entry_passes_custom_color_to_generator(
+    monkeypatch, tmp_path: Path
+) -> None:
+    batch = tmp_path / "icons.json"
+    batch.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "Node",
+                    "category": "server",
+                    "theme": "custom",
+                    "custom_color": "#00b8a9",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    captured = []
+    monkeypatch.setattr(cli, "generate_icon", lambda request: captured.append(request) or {})
+
+    cli.run_batch(str(batch), str(tmp_path))
+
+    assert captured[0].custom_color == "#00b8a9"
 
 
 def test_bare_invocation_opens_the_web_ui(monkeypatch) -> None:

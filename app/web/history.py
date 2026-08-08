@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS generations (
   category TEXT NOT NULL,
   style TEXT NOT NULL,
   theme TEXT NOT NULL,
+  custom_color TEXT,
   size INTEGER NOT NULL,
   format TEXT NOT NULL,
   transparent_bg INTEGER NOT NULL,
@@ -164,6 +165,9 @@ class GalleryStore:
         just resumes on the next open instead of destroying data.
         """
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(generations)")}
+        if "custom_color" not in columns:
+            conn.execute("ALTER TABLE generations ADD COLUMN custom_color TEXT")
+            conn.commit()
         if "output_key" not in columns:
             conn.execute("ALTER TABLE generations ADD COLUMN output_key TEXT")
             conn.commit()
@@ -227,6 +231,7 @@ class GalleryStore:
             "category": payload["category"],
             "style": payload["style"],
             "theme": payload["theme"],
+            "custom_color": payload.get("custom_color"),
             "size": int(payload["size"]),
             "format": payload["format"],
             "transparent_bg": int(bool(payload["transparent_bg"])),

@@ -17,6 +17,7 @@ class GenerateRequest(BaseModel):
     category: str = ""
     style: str = "minimal"
     theme: str = "blue"
+    custom_color: str | None = None
     size: int = 256
     format: str = "both"
     icon: str = "auto"

@@ -84,5 +84,12 @@ def test_non_ico_formats_allow_large_sizes(fmt):
 def test_valid_sets_are_nonempty():
     assert VALID_CATEGORIES
     assert VALID_STYLES == {"minimal", "terminal", "cyberpunk"}
-    assert VALID_THEMES == {"green", "blue", "orange", "purple", "grayscale"}
+    assert VALID_THEMES == {
+        "green",
+        "blue",
+        "orange",
+        "purple",
+        "grayscale",
+        "custom",
+    }
     assert {"png", "svg", "ico", "both", "all"} <= VALID_FORMATS

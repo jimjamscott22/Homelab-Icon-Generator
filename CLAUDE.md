@@ -88,7 +88,7 @@ Validation ranges:
 
 - category: one of the 24 `VALID_CATEGORIES`
 - style: minimal, terminal, cyberpunk
-- theme: green, blue, orange, purple, grayscale
+- theme: green, blue, orange, purple, grayscale, or custom with a six-digit `custom_color`
 - format: png, svg, ico, both, all
 - size: 32-2048; ICO/all require 256 or smaller
 

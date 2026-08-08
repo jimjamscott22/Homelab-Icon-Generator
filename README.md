@@ -13,7 +13,7 @@ request time.
 - Sanitized custom SVG icons and custom-over-built-in overrides
 - 24 procedural fallback categories with initials
 - One authoritative SVG composition for SVG, PNG, and ICO geometry
-- Minimal, terminal, and cyberpunk styles with five color themes
+- Minimal, terminal, and cyberpunk styles with five color presets plus a custom hue picker
 - Accessible web search/override controls and resolution metadata
 - PNG, SVG, ICO, `both`, and `all` output modes
 
@@ -45,6 +45,16 @@ uv run homelab-icons \
   --format both
 ```
 
+Create a theme from any six-digit hex color:
+
+```bash
+uv run homelab-icons \
+  --name "Router" \
+  --category router \
+  --theme custom \
+  --custom-color "#00b8a9"
+```
+
 Control identity with `--icon`:
 
 ```bash
@@ -62,7 +72,8 @@ uv run homelab-icons --name "Nextcloud" --category cloud_service --icon generic
 | `--icon` | `auto` | `auto`, `generic`, or an exact stable icon key |
 | `--icon-dir` | — | Custom icon directory; overrides environment/default discovery |
 | `--style` | `minimal` | `minimal`, `terminal`, or `cyberpunk` |
-| `--theme` | `blue` | `green`, `blue`, `orange`, `purple`, or `grayscale` |
+| `--theme` | `blue` | A preset (`green`, `blue`, `orange`, `purple`, `grayscale`) or `custom` |
+| `--custom-color` | — | Six-digit `#RRGGBB` color; required with `--theme custom` |
 | `--size` | `256` | Square size from 32 through 2048 pixels |
 | `--format` | `both` | `png`, `svg`, `ico`, `both`, or `all` |
 | `--output-dir` | `output` | Output root directory |
@@ -70,7 +81,9 @@ uv run homelab-icons --name "Nextcloud" --category cloud_service --icon generic
 | `--batch` | — | JSON-array or NDJSON batch file |
 
 ICO output is limited to 256px. Files remain grouped by fallback category at
-`output/{format}/{category}/{slug}-{style}-{theme}-{size}.{ext}`.
+`output/{format}/{category}/{slug}-{style}-{theme}-{size}.{ext}`. Custom themes
+include their normalized hex digits after `custom` so different colors do not
+overwrite one another.
 
 ### Categories
 

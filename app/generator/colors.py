@@ -1,5 +1,7 @@
 """Color palette definitions for the Homelab Icon Generator."""
 
+import colorsys
+import re
 from dataclasses import dataclass
 
 
@@ -21,10 +23,46 @@ COLOR_THEMES: dict[str, ColorPalette] = {
     "grayscale": ColorPalette(bg="#1a1a1a", fg="#3d3d3d", accent="#b0b0b0", text="#e8e8e8"),
 }
 
+CUSTOM_THEME = "custom"
+DEFAULT_CUSTOM_COLOR = "#00b8a9"
+_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
-def get_palette(theme: str) -> ColorPalette:
+
+def normalize_hex_color(value: str) -> str:
+    """Return a lowercase six-digit hex color or raise ValueError."""
+    if not isinstance(value, str) or _HEX_COLOR.fullmatch(value) is None:
+        raise ValueError("custom_color must match #RRGGBB")
+    return value.lower()
+
+
+def _hls_hex(hue: float, saturation: float, lightness: float) -> str:
+    red, green, blue = colorsys.hls_to_rgb(hue, lightness, saturation)
+    channels = (round(red * 255), round(green * 255), round(blue * 255))
+    return "#" + "".join(f"{channel:02x}" for channel in channels)
+
+
+def derive_custom_palette(value: str) -> ColorPalette:
+    """Derive a dark, coordinated palette from an exact accent color."""
+    accent = normalize_hex_color(value)
+    red, green, blue = (
+        int(accent[index:index + 2], 16) / 255 for index in (1, 3, 5)
+    )
+    hue, _, saturation = colorsys.rgb_to_hls(red, green, blue)
+    return ColorPalette(
+        bg=_hls_hex(hue, saturation, 0.08),
+        fg=_hls_hex(hue, saturation, 0.24),
+        accent=accent,
+        text=_hls_hex(hue, saturation, 0.88),
+    )
+
+
+def get_palette(theme: str, custom_color: str | None = None) -> ColorPalette:
     """Return palette for theme, raising ValueError if unknown."""
+    if theme == CUSTOM_THEME:
+        if custom_color is None:
+            raise ValueError("theme 'custom' requires custom_color")
+        return derive_custom_palette(custom_color)
     if theme not in COLOR_THEMES:
-        known = ", ".join(sorted(COLOR_THEMES.keys()))
+        known = ", ".join(sorted((*COLOR_THEMES.keys(), CUSTOM_THEME)))
         raise ValueError(f"Unknown theme '{theme}'. Known themes: {known}")
     return COLOR_THEMES[theme]
