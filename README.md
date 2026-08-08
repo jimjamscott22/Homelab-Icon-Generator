@@ -5,10 +5,12 @@ SVG overrides, and procedural fallbacks. Normal generation is offline: the
 application ships a pinned Simple Icons catalog and never fetches artwork at
 request time.
 
+![Screenshot](docs/img/homelab-icon-gen-scrnsht.png)
+
 ## Highlights
 
-- 3,450 bundled brands from Simple Icons 16.27.0
-- Conservative automatic detection: exact names and reviewed aliases only
+- 3,450 bundled brands from Simple Icons 16.27.0 via `app/icons/data/homelab-icons.json`
+- Conservative automatic detection: exact names and reviewed aliases only but never fuzzy auto-matches
 - Fuzzy suggestions for manual selection, never silent fuzzy auto-matches
 - Sanitized custom SVG icons and custom-over-built-in overrides
 - 24 procedural fallback categories with initials
@@ -18,7 +20,8 @@ request time.
 - PNG, SVG, ICO, `both`, and `all` output modes
 
 Brand and custom geometry is recolored using the selected theme and omits
-initials. Unknown names retain the selected generic category and initials.
+initials. Unknown names retain the selected generic category and initials. The fallback category is always included in the output path and metadata for
+clarity. The output directory is structured by format, category, and normalized slug. The web UI keeps a persistent gallery of the last 500 generations.
 
 ## Install
 
